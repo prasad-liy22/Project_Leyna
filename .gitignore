@@ -15,3 +15,8 @@ venv/
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
+
+# Node / web UI
+# `web/dist/` is intentionally committed: the backend serves it directly, so a
+# fresh clone works without running npm. Rebuild it after editing web/src/.
+web/node_modules/

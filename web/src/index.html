@@ -1,0 +1,275 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="description" content="Leyna — a warm, concise personal assistant." />
+    <!-- Point the UI at another origin, e.g. content="http://localhost:8000". -->
+    <meta name="leyna-api-base" content="" />
+    <title>Leyna — Personal Assistant</title>
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%92%AB%3C/text%3E%3C/svg%3E" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./app.css" />
+  </head>
+
+  <body class="min-h-dvh">
+    <div class="mx-auto flex h-dvh max-w-5xl flex-col">
+      <!-- ============================ Header ============================ -->
+      <header class="flex items-center gap-3 px-4 py-3 sm:px-6">
+        <div
+          class="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-violet-500 to-indigo-500 text-lg shadow-lg shadow-violet-950/40"
+          aria-hidden="true"
+        >
+          💫
+        </div>
+        <div class="min-w-0 flex-1">
+          <h1 class="truncate text-base font-semibold tracking-tight text-white">Leyna</h1>
+          <p class="truncate text-xs text-slate-500">Your personal assistant</p>
+        </div>
+
+        <div
+          id="status-pill"
+          class="chip hidden sm:inline-flex"
+          title="Backend connection status"
+        >
+          <span id="status-dot" class="h-2 w-2 rounded-full bg-amber-400"></span>
+          <span id="status-text">Connecting…</span>
+        </div>
+
+        <button id="new-chat-btn" class="icon-btn" type="button" title="New chat" aria-label="New chat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+          </svg>
+        </button>
+
+        <button id="debug-btn" class="btn" type="button" aria-expanded="false" aria-controls="debug-drawer">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M11.42 15.17 17.25 21A2.65 2.65 0 0 0 21 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 1 1-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 0 0 4.486-6.336l-3.276 3.277a3.004 3.004 0 0 1-2.25-2.25l3.276-3.276a4.5 4.5 0 0 0-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085m-1.745 1.437L5.909 7.5H4.5L2.25 3.75l1.5-1.5L7.5 4.5v1.409l4.26 4.26m-1.745 1.437 1.745-1.437m6.615 8.206L15.75 15.75M4.867 19.125h.008v.008h-.008v-.008Z" />
+          </svg>
+          <span class="hidden sm:inline">Debug</span>
+        </button>
+      </header>
+
+      <!-- ============================ Chat ============================ -->
+      <main id="chat-scroll" class="flex-1 overflow-y-auto px-4 pb-4 sm:px-6">
+        <div id="empty-state" class="mx-auto flex max-w-2xl flex-col items-center gap-6 py-14 text-center">
+          <div class="grid h-16 w-16 place-items-center rounded-3xl bg-gradient-to-br from-violet-500/20 to-indigo-500/20 text-3xl ring-1 ring-violet-400/20">
+            💫
+          </div>
+          <div class="space-y-2">
+            <h2 class="text-xl font-semibold text-white">Hi, I'm Leyna.</h2>
+            <p class="text-sm text-slate-400">
+              Ask me anything — I'll stream the answer back as I write it.
+            </p>
+          </div>
+          <div class="flex flex-wrap justify-center gap-2">
+            <button class="btn" data-suggestion="What can you help me with?" type="button">
+              What can you help me with?
+            </button>
+            <button class="btn" data-suggestion="Summarise the key ideas of stoicism." type="button">
+              Summarise stoicism
+            </button>
+            <button class="btn" data-suggestion="Write a short, friendly reminder to drink water." type="button">
+              Write a reminder
+            </button>
+          </div>
+        </div>
+
+        <div id="messages" class="mx-auto flex max-w-3xl flex-col gap-4 py-2"></div>
+      </main>
+
+      <!-- ========================== Composer ========================== -->
+      <footer class="px-4 pb-4 sm:px-6">
+        <form id="composer-form" class="mx-auto max-w-3xl">
+          <div class="card flex items-end gap-2 p-2 transition focus-within:border-violet-400/50">
+            <textarea
+              id="composer-input"
+              rows="1"
+              placeholder="Message Leyna…  (Enter to send, Shift+Enter for a new line)"
+              class="max-h-40 flex-1 resize-none bg-transparent px-2 py-2 text-[0.95rem] text-slate-100 placeholder:text-slate-500 focus:outline-none"
+              autocomplete="off"
+            ></textarea>
+
+            <button id="stop-btn" class="btn btn-danger hidden" type="button" title="Stop generating">
+              <svg viewBox="0 0 24 24" fill="currentColor" class="h-4 w-4">
+                <rect x="6" y="6" width="12" height="12" rx="2" />
+              </svg>
+              Stop
+            </button>
+
+            <button id="send-btn" class="btn btn-primary h-10 w-10 !px-0" type="submit" title="Send" aria-label="Send" disabled>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" class="h-5 w-5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 12 3.27 3.13a.75.75 0 0 1 .98-.94l16.5 7.5a.75.75 0 0 1 0 1.37l-16.5 7.5a.75.75 0 0 1-.98-.94L6 12Zm0 0h7.5" />
+              </svg>
+            </button>
+          </div>
+          <p class="mt-2 text-center text-[0.7rem] text-slate-600">
+            Leyna can make mistakes. Verify important information.
+          </p>
+        </form>
+      </footer>
+    </div>
+
+    <!-- ========================= Debug drawer ========================= -->
+    <div
+      id="debug-overlay"
+      class="fixed inset-0 z-40 hidden bg-slate-950/70 backdrop-blur-sm"
+      aria-hidden="true"
+    ></div>
+
+    <aside
+      id="debug-drawer"
+      class="fixed inset-y-0 right-0 z-50 flex w-full max-w-md translate-x-full flex-col border-l border-slate-800 bg-slate-950/95 shadow-2xl transition-transform duration-300 ease-out"
+      aria-label="Debug panel"
+      aria-hidden="true"
+    >
+      <div class="flex items-center gap-2 border-b border-slate-800 px-4 py-3">
+        <span class="grid h-8 w-8 place-items-center rounded-lg bg-amber-500/15 text-amber-300">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 13.5V3.75m0 9.75a1.5 1.5 0 0 1 0 3m0-3a1.5 1.5 0 0 0 0 3m0 3.75V16.5m12-3V3.75m0 9.75a1.5 1.5 0 0 1 0 3m0-3a1.5 1.5 0 0 0 0 3m0 3.75V16.5m-6-9V3.75m0 3.75a1.5 1.5 0 0 1 0 3m0-3a1.5 1.5 0 0 0 0 3m0 9.75V10.5" />
+          </svg>
+        </span>
+        <h2 class="flex-1 text-sm font-semibold text-white">Debug</h2>
+        <span id="debug-status" class="text-[0.7rem] text-slate-500"></span>
+        <button id="debug-close" class="icon-btn" type="button" aria-label="Close debug panel">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="flex gap-1 border-b border-slate-800 px-3 py-2">
+        <button class="tab tab-active" data-tab="usage" type="button">Usage</button>
+        <button class="tab" data-tab="logs" type="button">Logs</button>
+        <button class="tab" data-tab="api-key" type="button">API key</button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-4">
+        <!-- ------------------------------ Usage ------------------------------ -->
+        <section id="panel-usage" class="space-y-4">
+          <div id="usage-totals" class="grid grid-cols-2 gap-2 sm:grid-cols-3"></div>
+
+          <div class="flex items-center gap-2">
+            <h3 class="flex-1 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+              Recent requests
+            </h3>
+            <button id="usage-clear" class="btn btn-ghost !px-2 !py-1 text-xs" type="button">Clear</button>
+          </div>
+
+          <div class="card overflow-hidden">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-slate-900/80 text-slate-500">
+                <tr>
+                  <th class="px-3 py-2 font-medium">Time</th>
+                  <th class="px-3 py-2 font-medium">Endpoint</th>
+                  <th class="px-3 py-2 text-right font-medium">Prompt</th>
+                  <th class="px-3 py-2 text-right font-medium">Reply</th>
+                  <th class="px-3 py-2 text-right font-medium">ms</th>
+                </tr>
+              </thead>
+              <tbody id="usage-table-body" class="divide-y divide-slate-800/70"></tbody>
+            </table>
+            <p id="usage-empty" class="px-3 py-6 text-center text-xs text-slate-500">
+              No requests recorded yet.
+            </p>
+          </div>
+        </section>
+
+        <!-- ------------------------------ Logs ------------------------------- -->
+        <section id="panel-logs" class="hidden space-y-3">
+          <div class="flex items-center gap-2">
+            <select id="logs-level" class="field !w-auto !py-1.5 text-xs">
+              <option value="DEBUG">DEBUG</option>
+              <option value="INFO" selected>INFO</option>
+              <option value="WARNING">WARNING</option>
+              <option value="ERROR">ERROR</option>
+            </select>
+            <label class="chip cursor-pointer select-none">
+              <input id="logs-autoscroll" type="checkbox" checked class="accent-violet-500" />
+              Auto-scroll
+            </label>
+            <span class="flex-1"></span>
+            <button id="logs-clear" class="btn btn-ghost !px-2 !py-1 text-xs" type="button">Clear</button>
+          </div>
+
+          <div
+            id="logs-console"
+            class="h-[26rem] overflow-y-auto rounded-xl border border-slate-800 bg-slate-950/90 p-1.5"
+            role="log"
+            aria-live="polite"
+          >
+            <p id="logs-empty" class="px-2 py-6 text-center text-xs text-slate-500">
+              Waiting for log output…
+            </p>
+          </div>
+        </section>
+
+        <!-- --------------------------- API key ------------------------------ -->
+        <section id="panel-api-key" class="hidden space-y-5">
+          <div class="card space-y-1 p-4">
+            <p class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Active key</p>
+            <p id="key-masked" class="font-mono text-sm text-slate-200">—</p>
+            <p class="text-xs text-slate-500">
+              Source: <span id="key-source" class="text-slate-400">—</span>
+            </p>
+          </div>
+
+          <form id="key-form" class="space-y-3">
+            <label class="block space-y-1.5">
+              <span class="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+                New API key
+              </span>
+              <input
+                id="key-input"
+                type="password"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="sk-…"
+                class="field font-mono"
+              />
+            </label>
+
+            <label class="flex items-center gap-2 text-xs text-slate-400">
+              <input id="key-persist" type="checkbox" class="accent-violet-500" />
+              Also write to <code class="font-mono text-slate-300">.env</code> (survives restart)
+            </label>
+
+            <div class="flex gap-2">
+              <button id="key-apply" class="btn btn-primary flex-1" type="submit">Apply</button>
+              <button id="key-revert" class="btn flex-1" type="button">
+                Revert to .env
+              </button>
+            </div>
+
+            <p id="key-feedback" class="min-h-4 text-xs"></p>
+          </form>
+
+          <label class="block space-y-1.5 border-t border-slate-800 pt-4">
+            <span class="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+              Admin token
+            </span>
+            <input
+              id="admin-token"
+              type="password"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Only needed when ADMIN_TOKEN is set"
+              class="field font-mono"
+            />
+            <span class="block text-[0.7rem] text-slate-600">
+              Stored in this browser only; sent as <code class="font-mono">X-Admin-Token</code>.
+            </span>
+          </label>
+        </section>
+      </div>
+    </aside>
+
+    <div id="toasts" class="pointer-events-none fixed right-4 bottom-4 z-[60] flex flex-col gap-2"></div>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

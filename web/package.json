@@ -1,0 +1,18 @@
+{
+  "name": "leyna-web",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Tailwind CSS web UI for the Leyna personal assistant.",
+  "scripts": {
+    "build": "npm run build:css && node build.mjs",
+    "build:css": "tailwindcss -i ./src/input.css -o ./dist/app.css --minify",
+    "watch": "tailwindcss -i ./src/input.css -o ./dist/app.css --watch",
+    "dev": "node build.mjs && npm run watch",
+    "smoke": "node smoke.mjs"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "tailwindcss": "^4.3.3"
+  }
+}

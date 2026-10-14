@@ -10,10 +10,12 @@ from __future__ import annotations
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .config import Settings, get_settings
@@ -121,4 +123,16 @@ async def chat_stream(payload: ChatRequest, request: Request) -> StreamingRespon
         event_source(),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+# Serve the built Tailwind web UI at the root. Mounted last so the API routes
+# defined above always win; anything unmatched falls through to the static app.
+_web_dir = Path(get_settings().web_dir)
+if _web_dir.is_dir():
+    app.mount("/", StaticFiles(directory=_web_dir, html=True), name="web")
+else:
+    logger.warning(
+        "Web UI not found at %s — build it with 'cd web && npm run build'.",
+        _web_dir,
     )

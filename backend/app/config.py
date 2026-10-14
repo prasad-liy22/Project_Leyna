@@ -5,6 +5,7 @@ same code runs locally and in production without edits.
 """
 
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -53,6 +54,14 @@ class Settings(BaseSettings):
         default="*",
         description="Comma-separated list of allowed origins, or '*' for any. "
         "Set to your frontend URL(s) in production.",
+    )
+
+    # --- Web UI -------------------------------------------------------------
+    web_dir: str = Field(
+        default=str(Path(__file__).resolve().parents[2] / "web" / "dist"),
+        description="Directory holding the built Tailwind web UI, served at "
+        "'/'. Defaults to <repo>/web/dist. Rebuild it with "
+        "'cd web && npm run build'.",
     )
 
     # --- Debug --------------------------------------------------------------

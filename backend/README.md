@@ -14,6 +14,7 @@ This service lives in `backend/`. All commands below are run from that folder.
 - `POST /chat` — send a conversation, get the full reply back.
 - `POST /chat/stream` — receive the reply token-by-token as Server-Sent Events.
 - `GET /health` — liveness probe plus configuration status.
+- Serves a bundled Tailwind CSS web UI at `/` (see [`../web/`](../web/README.md)).
 - Configurable model, endpoint, system prompt, and timeout via environment.
 - Async HTTP with connection pooling (`httpx`).
 - Interactive docs at `/docs` (Swagger UI) and `/redoc`.
@@ -28,12 +29,17 @@ app/
   main.py       # FastAPI app and routes
 tests/
   test_chat.py        # API tests with the upstream API mocked
+  test_debug.py       # debug API tests
+  test_web.py         # static web UI serving tests
 requirements.txt      # runtime dependencies
 requirements-dev.txt  # test dependencies
 .env.example          # template for your local .env
 ```
 
-The Flutter chat UI lives in a sibling folder, [`../frontend/`](../frontend/README.md).
+Two UIs live in sibling folders and both talk to this API:
+
+- [`../web/`](../web/README.md) — HTML + Tailwind CSS, **served by this backend at `/`**.
+- [`../frontend/`](../frontend/README.md) — Flutter (web) client, run separately.
 
 ## Quickstart
 
@@ -200,6 +206,7 @@ All settings are read from the environment (or `.env`). See `.env.example`.
 | `CORS_ORIGINS`    | `*`                           | Comma-separated allowed browser origins. |
 | `DEBUG_ENABLED`   | `true`                        | Expose the `/debug` routes.              |
 | `ADMIN_TOKEN`     | *(empty)*                     | If set, `/debug` needs `X-Admin-Token`.  |
+| `WEB_DIR`         | `<repo>/web/dist`             | Folder served at `/` as the web UI.      |
 
 ### Notes
 
@@ -221,8 +228,13 @@ uv pip install -r requirements-dev.txt
 pytest
 ```
 
-## Frontend
+## Frontends
 
-A Flutter chat UI lives in [`../frontend/`](../frontend/README.md) and talks to
-this API over HTTP. It targets web; start this backend, then run
-`flutter run -d chrome` from that directory.
+Two clients talk to this API over HTTP:
+
+- **Web UI (recommended)** — [`../web/`](../web/README.md), an HTML + Tailwind
+  CSS app that this backend serves at `/`. Because the assets are committed,
+  just start the server and open <http://127.0.0.1:8000/>. Rebuild with
+  `cd ../web && npm run build` after editing `web/src/`.
+- **Flutter** — [`../frontend/`](../frontend/README.md), a Flutter web client
+  you run separately with `flutter run -d chrome`.

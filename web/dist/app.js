@@ -1,0 +1,754 @@
+/* Leyna web UI — a dependency-free client for the FastAPI backend.
+ *
+ * Handles: streaming chat over SSE, a persisted conversation, a health probe,
+ * and the debug drawer (token usage, live server logs, runtime API-key swap).
+ */
+
+// Tailwind scans this file for class names. Dynamic class strings must appear
+// literally somewhere in the source, so keep this safelist comment:
+// log-debug log-info log-warning log-error bubble-user bubble-assistant
+// bubble-error animate-bounce-dot animate-blink animate-fade-up animate-slide-in
+// bg-emerald-400 bg-amber-400 bg-slate-500 bg-rose-400 text-rose-300
+// text-emerald-300 text-white
+
+const API_BASE = (document.querySelector('meta[name="leyna-api-base"]')?.content ?? "")
+  .trim()
+  .replace(/\/+$/, "");
+const HISTORY_KEY = "leyna.history.v1";
+const ADMIN_KEY = "leyna.adminToken";
+const POLL_MS = 2000;
+
+const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => Array.from(document.querySelectorAll(selector));
+
+const canStream = typeof ReadableStream === "function" && "body" in Response.prototype;
+
+const dom = {
+  scroll: $("#chat-scroll"),
+  messages: $("#messages"),
+  empty: $("#empty-state"),
+  form: $("#composer-form"),
+  input: $("#composer-input"),
+  send: $("#send-btn"),
+  stop: $("#stop-btn"),
+  newChat: $("#new-chat-btn"),
+  debugBtn: $("#debug-btn"),
+  statusDot: $("#status-dot"),
+  statusText: $("#status-text"),
+  drawer: $("#debug-drawer"),
+  overlay: $("#debug-overlay"),
+  debugClose: $("#debug-close"),
+  debugStatus: $("#debug-status"),
+  toasts: $("#toasts"),
+  tabs: $$("[data-tab]"),
+  panelUsage: $("#panel-usage"),
+  panelLogs: $("#panel-logs"),
+  panelKey: $("#panel-api-key"),
+  usageTotals: $("#usage-totals"),
+  usageBody: $("#usage-table-body"),
+  usageEmpty: $("#usage-empty"),
+  usageClear: $("#usage-clear"),
+  logsConsole: $("#logs-console"),
+  logsEmpty: $("#logs-empty"),
+  logsLevel: $("#logs-level"),
+  logsAutoscroll: $("#logs-autoscroll"),
+  logsClear: $("#logs-clear"),
+  keyMasked: $("#key-masked"),
+  keySource: $("#key-source"),
+  keyForm: $("#key-form"),
+  keyInput: $("#key-input"),
+  keyPersist: $("#key-persist"),
+  keyApply: $("#key-apply"),
+  keyRevert: $("#key-revert"),
+  keyFeedback: $("#key-feedback"),
+  adminToken: $("#admin-token"),
+};
+
+const state = {
+  messages: [],
+  busy: false,
+  controller: null,
+  debugOpen: false,
+  activeTab: "usage",
+  lastLogId: 0,
+  timer: null,
+  health: { online: false, configured: false, model: "" },
+};
+
+let nextId = 1;
+
+/* -------------------------------------------------------------------------- */
+/* Small helpers                                                              */
+/* -------------------------------------------------------------------------- */
+const el = (tag, className = "") => {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  return node;
+};
+
+const escapeHtml = (value) =>
+  String(value ?? "").replace(
+    /[&<>"']/g,
+    (char) =>
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[char],
+  );
+
+const fmt = (value) => (value === null || value === undefined ? "—" : value.toLocaleString());
+
+const clockTime = (iso) => {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "--:--:--" : date.toLocaleTimeString();
+};
+
+/** A deliberately small Markdown subset, escaped before any markup is added. */
+function renderMarkdown(source) {
+  if (!source) return "";
+
+  const blocks = [];
+  let text = escapeHtml(source).replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+    blocks.push(`<pre><code data-lang="${lang}">${code.replace(/\n$/, "")}</code></pre>`);
+    return `\u0000${blocks.length - 1}\u0000`;
+  });
+
+  text = text
+    .replace(/`([^`\n]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+    .replace(
+      /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g,
+      '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>',
+    );
+
+  return text
+    .split(/\n{2,}/)
+    .map((paragraph) => {
+      const trimmed = paragraph.trim();
+      if (!trimmed) return "";
+      if (/^\u0000\d+\u0000$/.test(trimmed)) return trimmed;
+      return `<p>${trimmed.replace(/\n/g, "<br>")}</p>`;
+    })
+    .join("")
+    .replace(/\u0000(\d+)\u0000/g, (_, index) => blocks[Number(index)]);
+}
+
+/* -------------------------------------------------------------------------- */
+/* Toasts                                                                     */
+/* -------------------------------------------------------------------------- */
+function toast(message, kind = "info") {
+  const node = el(
+    "div",
+    `card pointer-events-auto animate-slide-in px-4 py-2 text-sm ${
+      kind === "error" ? "border-rose-500/40 text-rose-200" : "text-slate-200"
+    }`,
+  );
+  node.textContent = message;
+  dom.toasts.appendChild(node);
+  setTimeout(() => {
+    node.classList.add("opacity-0", "transition-opacity");
+    setTimeout(() => node.remove(), 300);
+  }, 4000);
+}
+
+/* -------------------------------------------------------------------------- */
+/* HTTP                                                                       */
+/* -------------------------------------------------------------------------- */
+async function readError(response) {
+  try {
+    const data = await response.json();
+    if (data && typeof data.detail === "string") return data.detail;
+    if (data && data.detail) return JSON.stringify(data.detail);
+  } catch {
+    /* fall through to the status line */
+  }
+  return `${response.status} ${response.statusText}`.trim();
+}
+
+function adminHeaders() {
+  const token = localStorage.getItem(ADMIN_KEY);
+  return token ? { "X-Admin-Token": token } : {};
+}
+
+async function debugRequest(path, options = {}) {
+  const response = await fetch(`${API_BASE}/debug${path}`, {
+    ...options,
+    headers: { "Content-Type": "application/json", ...adminHeaders(), ...(options.headers ?? {}) },
+  });
+  if (!response.ok) throw new Error(await readError(response));
+  return response.json();
+}
+
+/* -------------------------------------------------------------------------- */
+/* Health                                                                     */
+/* -------------------------------------------------------------------------- */
+async function refreshHealth() {
+  try {
+    const response = await fetch(`${API_BASE}/health`);
+    if (!response.ok) throw new Error();
+    const data = await response.json();
+    state.health = { online: true, configured: Boolean(data.configured), model: data.model };
+  } catch {
+    state.health = { online: false, configured: false, model: "" };
+  }
+
+  const { online, configured, model } = state.health;
+  let dot = "bg-slate-500";
+  let label = "Backend offline";
+  if (online && configured) {
+    dot = "bg-emerald-400";
+    label = model || "Ready";
+  } else if (online) {
+    dot = "bg-amber-400";
+    label = "No API key";
+  }
+  dom.statusDot.className = `h-2 w-2 rounded-full ${dot}`;
+  dom.statusText.textContent = label;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Messages                                                                   */
+/* -------------------------------------------------------------------------- */
+const typingIndicator = () => `
+  <span class="inline-flex items-center gap-1 py-1">
+    <span class="h-1.5 w-1.5 rounded-full bg-slate-500 animate-bounce-dot"></span>
+    <span class="h-1.5 w-1.5 rounded-full bg-slate-500 animate-bounce-dot [animation-delay:150ms]"></span>
+    <span class="h-1.5 w-1.5 rounded-full bg-slate-500 animate-bounce-dot [animation-delay:300ms]"></span>
+  </span>`;
+
+const cursor = () =>
+  '<span class="ml-0.5 inline-block h-4 w-[2px] translate-y-0.5 bg-violet-400 animate-blink"></span>';
+
+function createMessageNode(message) {
+  const row = el("div", "flex flex-col gap-1");
+  if (message.role === "user") row.classList.add("items-end");
+
+  const bubble = el("div", "bubble");
+  const content = el("div", "markdown");
+  bubble.appendChild(content);
+
+  const meta = el("div", "flex items-center gap-2 px-1 text-[0.68rem] text-slate-500");
+
+  row.append(bubble, meta);
+  message.node = { row, bubble, content, meta };
+  paintMessage(message);
+  return row;
+}
+
+function paintMessage(message) {
+  const { bubble, content, meta } = message.node;
+
+  bubble.classList.toggle("bubble-user", message.role === "user");
+  bubble.classList.toggle("bubble-assistant", message.role === "assistant" && !message.error);
+  bubble.classList.toggle("bubble-error", Boolean(message.error));
+
+  if (message.pending && !message.content) {
+    content.innerHTML = typingIndicator();
+  } else {
+    content.innerHTML =
+      renderMarkdown(message.content || "") + (message.pending ? cursor() : "");
+  }
+
+  const chips = [];
+  if (message.error) chips.push(`<span class="text-rose-400">⚠ ${escapeHtml(message.error)}</span>`);
+  if (message.tokens) {
+    chips.push(
+      `<span class="chip !py-0.5" title="prompt / completion tokens">↑ ${fmt(
+        message.tokens.prompt,
+      )} · ↓ ${fmt(message.tokens.completion)}</span>`,
+    );
+  }
+  if (message.model) chips.push(`<span class="text-slate-600">${escapeHtml(message.model)}</span>`);
+  if (message.role === "assistant" && message.content && !message.pending) {
+    chips.push(
+      `<button type="button" data-copy="${message.id}" class="cursor-pointer transition hover:text-slate-300">Copy</button>`,
+    );
+  }
+  meta.innerHTML = chips.join("");
+  meta.classList.toggle("hidden", chips.length === 0);
+}
+
+function schedulePaint(message) {
+  if (message._raf) return;
+  message._raf = requestAnimationFrame(() => {
+    message._raf = null;
+    paintMessage(message);
+    if (nearBottom()) scrollToBottom();
+  });
+}
+
+function mountMessage(message) {
+  dom.messages.appendChild(createMessageNode(message));
+}
+
+function addMessage(partial) {
+  const message = {
+    id: nextId++,
+    role: "assistant",
+    content: "",
+    tokens: null,
+    model: null,
+    error: null,
+    pending: false,
+    ...partial,
+  };
+  state.messages.push(message);
+  mountMessage(message);
+  syncEmptyState();
+  scrollToBottom(true);
+  return message;
+}
+
+function syncEmptyState() {
+  dom.empty.classList.toggle("hidden", state.messages.length > 0);
+}
+
+function nearBottom() {
+  return dom.scroll.scrollHeight - dom.scroll.scrollTop - dom.scroll.clientHeight < 140;
+}
+
+function scrollToBottom(force = false) {
+  if (force || nearBottom()) dom.scroll.scrollTop = dom.scroll.scrollHeight;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Persistence                                                                */
+/* -------------------------------------------------------------------------- */
+function saveHistory() {
+  try {
+    const payload = state.messages
+      .filter((message) => message.content || message.error)
+      .map(({ role, content, tokens, model, error }) => ({ role, content, tokens, model, error }));
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(payload));
+  } catch {
+    /* storage is best-effort */
+  }
+}
+
+function loadHistory() {
+  try {
+    const raw = localStorage.getItem(HISTORY_KEY);
+    if (!raw) return;
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return;
+    state.messages = parsed
+      .filter((message) => message && typeof message.content === "string" && message.content)
+      .map((message) => ({
+        id: nextId++,
+        role: message.role === "user" ? "user" : "assistant",
+        content: message.content,
+        tokens: message.tokens ?? null,
+        model: message.model ?? null,
+        error: message.error ?? null,
+        pending: false,
+      }));
+  } catch {
+    state.messages = [];
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Chat                                                                       */
+/* -------------------------------------------------------------------------- */
+async function streamReply(payload, message, signal) {
+  if (!canStream) {
+    const response = await fetch(`${API_BASE}/chat`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal,
+    });
+    if (!response.ok) throw new Error(await readError(response));
+    const data = await response.json();
+    message.content = data.message?.content ?? "";
+    message.model = data.model ?? null;
+    message.tokens = { prompt: data.prompt_tokens ?? null, completion: data.completion_tokens ?? null };
+    paintMessage(message);
+    return;
+  }
+
+  const response = await fetch(`${API_BASE}/chat/stream`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal,
+  });
+  if (!response.ok) throw new Error(await readError(response));
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+
+    let boundary;
+    while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+      const frame = buffer.slice(0, boundary);
+      buffer = buffer.slice(boundary + 2);
+
+      for (const line of frame.split("\n")) {
+        if (!line.startsWith("data:")) continue;
+        const raw = line.slice(5).trim();
+        if (!raw) continue;
+
+        let event;
+        try {
+          event = JSON.parse(raw);
+        } catch {
+          continue;
+        }
+
+        if (event.error) throw new Error(event.error);
+        if (typeof event.delta === "string" && event.delta) {
+          message.content += event.delta;
+          schedulePaint(message);
+        }
+        if (event.done) {
+          message.model = event.model ?? message.model;
+          message.tokens = {
+            prompt: event.prompt_tokens ?? null,
+            completion: event.completion_tokens ?? null,
+          };
+        }
+      }
+    }
+  }
+}
+
+async function sendMessage(rawText) {
+  const content = rawText.trim();
+  if (!content || state.busy) return;
+
+  addMessage({ role: "user", content });
+  dom.input.value = "";
+  autoGrow();
+
+  const reply = addMessage({ role: "assistant", pending: true });
+  const controller = new AbortController();
+  state.controller = controller;
+
+  const payload = {
+    messages: state.messages
+      .filter((message) => message.content && message.id !== reply.id)
+      .map(({ role, content: text }) => ({ role, content: text })),
+  };
+
+  setBusy(true);
+  try {
+    await streamReply(payload, reply, controller.signal);
+  } catch (error) {
+    if (error.name === "AbortError") {
+      if (!reply.content) reply.content = "_Generation stopped._";
+    } else {
+      reply.error = error.message;
+      toast(error.message, "error");
+    }
+  } finally {
+    reply.pending = false;
+    reply._raf = null;
+    state.controller = null;
+    paintMessage(reply);
+    setBusy(false);
+    saveHistory();
+    scrollToBottom();
+  }
+}
+
+function setBusy(busy) {
+  state.busy = busy;
+  dom.stop.classList.toggle("hidden", !busy);
+  dom.send.classList.toggle("hidden", busy);
+  updateSendState();
+}
+
+function updateSendState() {
+  dom.send.disabled = state.busy || dom.input.value.trim().length === 0;
+}
+
+function autoGrow() {
+  dom.input.style.height = "auto";
+  dom.input.style.height = `${Math.min(dom.input.scrollHeight, 160)}px`;
+}
+
+function resetConversation() {
+  if (state.busy) state.controller?.abort();
+  state.messages = [];
+  state.lastLogId = 0;
+  dom.messages.innerHTML = "";
+  syncEmptyState();
+  try {
+    localStorage.removeItem(HISTORY_KEY);
+  } catch {
+    /* ignore */
+  }
+  dom.input.focus();
+}
+
+/* -------------------------------------------------------------------------- */
+/* Debug drawer                                                               */
+/* -------------------------------------------------------------------------- */
+function setFeedback(text, tone = "text-slate-400") {
+  dom.keyFeedback.className = `min-h-4 text-xs ${tone}`;
+  dom.keyFeedback.textContent = text;
+}
+
+function selectTab(tab) {
+  state.activeTab = tab;
+  dom.tabs.forEach((button) => button.classList.toggle("tab-active", button.dataset.tab === tab));
+  dom.panelUsage.classList.toggle("hidden", tab !== "usage");
+  dom.panelLogs.classList.toggle("hidden", tab !== "logs");
+  dom.panelKey.classList.toggle("hidden", tab !== "api-key");
+  void refreshDebug();
+}
+
+function openDebug() {
+  state.debugOpen = true;
+  dom.drawer.classList.remove("translate-x-full");
+  dom.drawer.setAttribute("aria-hidden", "false");
+  dom.overlay.classList.remove("hidden");
+  dom.debugBtn.setAttribute("aria-expanded", "true");
+  void refreshDebug();
+  clearInterval(state.timer);
+  state.timer = setInterval(() => void refreshDebug(), POLL_MS);
+}
+
+function closeDebug() {
+  state.debugOpen = false;
+  dom.drawer.classList.add("translate-x-full");
+  dom.drawer.setAttribute("aria-hidden", "true");
+  dom.overlay.classList.add("hidden");
+  dom.debugBtn.setAttribute("aria-expanded", "false");
+  clearInterval(state.timer);
+  state.timer = null;
+}
+
+async function refreshDebug() {
+  try {
+    if (state.activeTab === "usage") await renderUsage();
+    else if (state.activeTab === "logs") await renderLogs();
+    else await renderKeyState();
+    dom.debugStatus.textContent = "";
+  } catch (error) {
+    dom.debugStatus.textContent = "unavailable";
+    if (!dom.debugOpen) return;
+    if (state.activeTab === "logs") {
+      dom.logsEmpty.textContent = `Debug API unavailable — ${error.message}`;
+      dom.logsEmpty.classList.remove("hidden");
+    }
+  }
+}
+
+const statCard = (label, value, tone = "text-white") => `
+  <div class="card p-3">
+    <p class="text-[0.62rem] font-semibold tracking-wide text-slate-500 uppercase">${label}</p>
+    <p class="mt-1 text-lg font-semibold ${tone}">${value}</p>
+  </div>`;
+
+function usageRow(record) {
+  const dot = record.ok
+    ? '<span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>'
+    : '<span class="h-1.5 w-1.5 rounded-full bg-rose-400"></span>';
+  return `<tr class="text-slate-300" title="${escapeHtml(record.error || record.model)}">
+      <td class="px-3 py-2 font-mono text-[0.68rem] whitespace-nowrap text-slate-500">${clockTime(record.time)}</td>
+      <td class="px-3 py-2">
+        <span class="inline-flex items-center gap-1.5 whitespace-nowrap">${dot}${escapeHtml(record.endpoint)}</span>
+      </td>
+      <td class="px-3 py-2 text-right font-mono">${fmt(record.prompt_tokens)}</td>
+      <td class="px-3 py-2 text-right font-mono">${fmt(record.completion_tokens)}</td>
+      <td class="px-3 py-2 text-right font-mono text-slate-500">${Math.round(record.latency_ms)}</td>
+    </tr>`;
+}
+
+async function renderUsage() {
+  const data = await debugRequest("/usage?limit=50");
+  const totals = data.totals;
+  dom.usageTotals.innerHTML = [
+    statCard("Requests", fmt(totals.requests)),
+    statCard("Prompt tokens", fmt(totals.prompt_tokens)),
+    statCard("Reply tokens", fmt(totals.completion_tokens)),
+    statCard("Total tokens", fmt(totals.total_tokens)),
+    statCard("Errors", fmt(totals.errors), totals.errors ? "text-rose-300" : "text-white"),
+    statCard(
+      "Success rate",
+      totals.requests ? `${Math.round((totals.ok / totals.requests) * 100)}%` : "—",
+      totals.requests && totals.errors === 0 ? "text-emerald-300" : "text-white",
+    ),
+  ].join("");
+  dom.usageBody.innerHTML = data.records.map(usageRow).join("");
+  dom.usageEmpty.classList.toggle("hidden", data.records.length > 0);
+}
+
+function logLine(record) {
+  const level = (record.level || "INFO").toUpperCase();
+  const node = el("div", `log-line log-${level.toLowerCase()}`);
+  node.innerHTML = `
+    <span class="shrink-0 text-slate-600">${clockTime(record.time)}</span>
+    <span class="w-16 shrink-0">${escapeHtml(level)}</span>
+    <span class="min-w-0 flex-1 break-words whitespace-pre-wrap">${escapeHtml(record.message)}</span>`;
+  return node;
+}
+
+async function renderLogs() {
+  const level = dom.logsLevel.value;
+  const data = await debugRequest(`/logs?after=${state.lastLogId}&level=${level}&limit=500`);
+  if (!data.records.length) return;
+
+  dom.logsEmpty.classList.add("hidden");
+  for (const record of data.records) {
+    dom.logsConsole.appendChild(logLine(record));
+    state.lastLogId = Math.max(state.lastLogId, record.id);
+  }
+
+  const lines = dom.logsConsole.querySelectorAll(".log-line");
+  for (let index = 0; index < lines.length - 800; index += 1) lines[index].remove();
+
+  if (dom.logsAutoscroll.checked) dom.logsConsole.scrollTop = dom.logsConsole.scrollHeight;
+}
+
+async function renderKeyState() {
+  const data = await debugRequest("/state");
+  dom.keyMasked.textContent = data.api_key.masked || "not set";
+  dom.keySource.textContent = data.api_key.source;
+}
+
+/* -------------------------------------------------------------------------- */
+/* Wiring                                                                     */
+/* -------------------------------------------------------------------------- */
+dom.form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  void sendMessage(dom.input.value);
+});
+
+dom.input.addEventListener("input", () => {
+  autoGrow();
+  updateSendState();
+});
+
+dom.input.addEventListener("keydown", (event) => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    void sendMessage(dom.input.value);
+  }
+});
+
+dom.stop.addEventListener("click", () => state.controller?.abort());
+dom.newChat.addEventListener("click", resetConversation);
+
+dom.messages.addEventListener("click", async (event) => {
+  const button = event.target.closest("[data-copy]");
+  if (!button) return;
+  const message = state.messages.find((item) => item.id === Number(button.dataset.copy));
+  if (!message) return;
+  try {
+    await navigator.clipboard.writeText(message.content);
+    toast("Copied to clipboard.");
+  } catch {
+    toast("Could not copy.", "error");
+  }
+});
+
+$$("[data-suggestion]").forEach((button) => {
+  button.addEventListener("click", () => {
+    dom.input.value = button.dataset.suggestion ?? "";
+    autoGrow();
+    updateSendState();
+    dom.input.focus();
+  });
+});
+
+dom.debugBtn.addEventListener("click", () => (state.debugOpen ? closeDebug() : openDebug()));
+dom.debugClose.addEventListener("click", closeDebug);
+dom.overlay.addEventListener("click", closeDebug);
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && state.debugOpen) closeDebug();
+});
+
+dom.tabs.forEach((button) => button.addEventListener("click", () => selectTab(button.dataset.tab)));
+
+dom.usageClear.addEventListener("click", async () => {
+  await debugRequest("/usage", { method: "DELETE" });
+  await renderUsage();
+});
+
+dom.logsClear.addEventListener("click", async () => {
+  await debugRequest("/logs", { method: "DELETE" });
+  dom.logsConsole.querySelectorAll(".log-line").forEach((line) => line.remove());
+  state.lastLogId = 0;
+  dom.logsEmpty.textContent = "Waiting for log output…";
+  dom.logsEmpty.classList.remove("hidden");
+});
+
+dom.logsLevel.addEventListener("change", () => {
+  state.lastLogId = 0;
+  dom.logsConsole.querySelectorAll(".log-line").forEach((line) => line.remove());
+  dom.logsEmpty.classList.remove("hidden");
+  void refreshDebug();
+});
+
+dom.logsAutoscroll.addEventListener("change", () => {
+  if (dom.logsAutoscroll.checked) dom.logsConsole.scrollTop = dom.logsConsole.scrollHeight;
+});
+
+dom.keyForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  dom.keyApply.disabled = true;
+  setFeedback("Applying…");
+  try {
+    await debugRequest("/api-key", {
+      method: "POST",
+      body: JSON.stringify({ api_key: dom.keyInput.value.trim(), persist: dom.keyPersist.checked }),
+    });
+    dom.keyInput.value = "";
+    dom.keyPersist.checked = false;
+    await renderKeyState();
+    await refreshHealth();
+    setFeedback("API key updated.", "text-emerald-300");
+    toast("API key updated.");
+  } catch (error) {
+    setFeedback(error.message, "text-rose-300");
+  } finally {
+    dom.keyApply.disabled = false;
+  }
+});
+
+dom.keyRevert.addEventListener("click", async () => {
+  dom.keyRevert.disabled = true;
+  try {
+    await debugRequest("/api-key", { method: "DELETE" });
+    await renderKeyState();
+    await refreshHealth();
+    setFeedback("Reverted to the .env key.", "text-emerald-300");
+  } catch (error) {
+    setFeedback(error.message, "text-rose-300");
+  } finally {
+    dom.keyRevert.disabled = false;
+  }
+});
+
+dom.adminToken.addEventListener("input", () => {
+  const token = dom.adminToken.value.trim();
+  if (token) localStorage.setItem(ADMIN_KEY, token);
+  else localStorage.removeItem(ADMIN_KEY);
+  void refreshDebug();
+});
+
+/* -------------------------------------------------------------------------- */
+/* Boot                                                                       */
+/* -------------------------------------------------------------------------- */
+function init() {
+  loadHistory();
+  state.messages.forEach(mountMessage);
+  syncEmptyState();
+  scrollToBottom(true);
+
+  dom.adminToken.value = localStorage.getItem(ADMIN_KEY) ?? "";
+  autoGrow();
+  updateSendState();
+  dom.input.focus();
+
+  void refreshHealth();
+  setInterval(() => void refreshHealth(), 15000);
+}
+
+init();

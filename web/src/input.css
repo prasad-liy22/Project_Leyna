@@ -1,0 +1,267 @@
+@import "tailwindcss" source(none);
+@source "./index.html";
+@source "./app.js";
+
+/* --------------------------------------------------------------------------
+   Design tokens
+   -------------------------------------------------------------------------- */
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
+    Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo,
+    Consolas, "Liberation Mono", monospace;
+
+  --animate-fade-up: fade-up 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-pop: pop 0.18s ease-out both;
+  --animate-blink: blink 1.05s steps(2, start) infinite;
+  --animate-bounce-dot: bounce-dot 1.2s ease-in-out infinite;
+  --animate-slide-in: slide-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes pop {
+    from {
+      opacity: 0;
+      transform: scale(0.96);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes blink {
+    50% {
+      opacity: 0;
+    }
+  }
+
+  @keyframes bounce-dot {
+    0%,
+    80%,
+    100% {
+      transform: translateY(0);
+      opacity: 0.4;
+    }
+    40% {
+      transform: translateY(-3px);
+      opacity: 1;
+    }
+  }
+
+  @keyframes slide-in {
+    from {
+      opacity: 0;
+      transform: translateX(12px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Base
+   -------------------------------------------------------------------------- */
+@layer base {
+  html {
+    color-scheme: dark;
+  }
+
+  body {
+    @apply bg-slate-950 text-slate-100 antialiased;
+    background-image:
+      radial-gradient(60rem 40rem at 15% -10%, rgba(139, 92, 246, 0.16), transparent 60%),
+      radial-gradient(50rem 40rem at 110% 10%, rgba(56, 189, 248, 0.12), transparent 55%);
+    background-attachment: fixed;
+  }
+
+  ::selection {
+    @apply bg-violet-500/40 text-white;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgb(71 85 105 / 0.7) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply rounded-full bg-slate-600/60;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-slate-500/80;
+    background-clip: content-box;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Components
+   -------------------------------------------------------------------------- */
+@layer components {
+  .btn {
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl
+      border border-slate-700/70 bg-slate-800/60 px-3.5 py-2 text-sm font-medium
+      text-slate-200 shadow-sm transition
+      hover:border-slate-600 hover:bg-slate-700/60
+      focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70
+      disabled:cursor-not-allowed disabled:opacity-40;
+  }
+
+  .btn-primary {
+    @apply border-transparent text-white shadow-lg shadow-violet-950/40
+      bg-gradient-to-br from-violet-500 to-indigo-500
+      hover:from-violet-400 hover:to-indigo-400
+      disabled:from-slate-700 disabled:to-slate-700 disabled:text-slate-400
+      disabled:shadow-none;
+  }
+
+  .btn-danger {
+    @apply border-rose-500/30 bg-rose-500/10 text-rose-300
+      hover:border-rose-400/50 hover:bg-rose-500/20;
+  }
+
+  .btn-ghost {
+    @apply border-transparent bg-transparent text-slate-400 shadow-none
+      hover:bg-slate-800/70 hover:text-slate-100;
+  }
+
+  .icon-btn {
+    @apply inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center
+      rounded-lg border border-transparent text-slate-400 transition
+      hover:bg-slate-800/80 hover:text-slate-100
+      focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70;
+  }
+
+  .card {
+    @apply rounded-2xl border border-slate-800/80 bg-slate-900/60 shadow-xl
+      shadow-slate-950/40 backdrop-blur;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-slate-700/60
+      bg-slate-800/50 px-2.5 py-1 text-xs font-medium text-slate-400;
+  }
+
+  .field {
+    @apply w-full rounded-xl border border-slate-700/70 bg-slate-900/70 px-3 py-2
+      text-sm text-slate-100 placeholder:text-slate-500 transition
+      focus:border-violet-400/70 focus:outline-none focus:ring-2
+      focus:ring-violet-400/25;
+  }
+
+  .tab {
+    @apply relative cursor-pointer rounded-lg px-3 py-1.5 text-sm font-medium
+      text-slate-400 transition hover:text-slate-200;
+  }
+
+  .tab-active {
+    @apply bg-slate-800/80 text-white shadow-sm;
+  }
+
+  .bubble {
+    @apply max-w-[min(46rem,88%)] rounded-2xl px-4 py-3 text-[0.95rem]
+      leading-relaxed shadow-lg animate-fade-up;
+  }
+
+  .bubble-user {
+    @apply rounded-br-md bg-gradient-to-br from-violet-600 to-indigo-600
+      text-white shadow-violet-950/40;
+  }
+
+  .bubble-assistant {
+    @apply rounded-bl-md border border-slate-800/80 bg-slate-900/70 text-slate-100
+      shadow-slate-950/40;
+  }
+
+  .bubble-error {
+    @apply rounded-bl-md border border-rose-500/40 bg-rose-500/10 text-rose-200;
+  }
+
+  .markdown p {
+    @apply my-2 first:mt-0 last:mb-0;
+  }
+
+  .markdown strong {
+    @apply font-semibold text-white;
+  }
+
+  .markdown em {
+    @apply italic text-slate-200;
+  }
+
+  .markdown a {
+    @apply font-medium text-violet-300 underline decoration-violet-400/40
+      underline-offset-2 hover:text-violet-200;
+  }
+
+  .markdown code {
+    @apply rounded-md border border-slate-700/60 bg-slate-950/70 px-1.5 py-0.5
+      font-mono text-[0.82em] text-sky-200;
+  }
+
+  .markdown pre {
+    @apply my-3 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/80
+      p-3.5 text-[0.85rem] leading-relaxed;
+  }
+
+  .markdown pre code {
+    @apply border-0 bg-transparent p-0 text-slate-200;
+  }
+
+  .markdown ul {
+    @apply my-2 list-disc space-y-1 pl-5;
+  }
+
+  .markdown ol {
+    @apply my-2 list-decimal space-y-1 pl-5;
+  }
+
+  .log-line {
+    @apply flex gap-2 border-b border-slate-900/60 px-2 py-1.5 font-mono
+      text-[0.72rem] leading-relaxed;
+  }
+
+  .log-debug {
+    @apply text-slate-500;
+  }
+
+  .log-info {
+    @apply text-sky-300;
+  }
+
+  .log-warning {
+    @apply text-amber-300;
+  }
+
+  .log-error {
+    @apply text-rose-300;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Utilities
+   -------------------------------------------------------------------------- */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
