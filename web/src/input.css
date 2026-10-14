@@ -2,8 +2,12 @@
 @source "./index.html";
 @source "./app.js";
 
+/* `dark:` is driven by a class on <html> (set by an inline script in <head>)
+   rather than by the OS media query, so the user's explicit choice wins. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* --------------------------------------------------------------------------
-   Design tokens
+   Design tokens — theme-independent
    -------------------------------------------------------------------------- */
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI",
@@ -71,28 +75,84 @@
 }
 
 /* --------------------------------------------------------------------------
+   Semantic colour tokens
+
+   `inline` makes Tailwind emit `var(--token)` inside the utilities instead of
+   a copy of the value, so redefining the token under `.dark` re-themes every
+   utility that uses it — no duplicated class names.
+   -------------------------------------------------------------------------- */
+@theme inline {
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-elevated: var(--elevated);
+  --color-elevated-hover: var(--elevated-hover);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-faint: var(--ink-faint);
+  --color-code: var(--code-bg);
+  --color-panel: var(--panel);
+}
+
+/* --------------------------------------------------------------------------
    Base
    -------------------------------------------------------------------------- */
 @layer base {
-  html {
+  :root {
+    --canvas: #f6f7fb;
+    --surface: rgba(255, 255, 255, 0.86);
+    --elevated: rgba(15, 23, 42, 0.05);
+    --elevated-hover: rgba(15, 23, 42, 0.09);
+    --line: rgba(15, 23, 42, 0.1);
+    --line-strong: rgba(15, 23, 42, 0.18);
+    --ink: #0f172a;
+    --ink-soft: #475569;
+    --ink-faint: #5e6c82;
+    --panel: #ffffff;
+    --code-bg: rgba(15, 23, 42, 0.05);
+    --glow-violet: rgba(139, 92, 246, 0.16);
+    --glow-sky: rgba(56, 189, 248, 0.14);
+    --scroll-thumb: rgba(100, 116, 139, 0.45);
+
+    color-scheme: light;
+  }
+
+  .dark {
+    --canvas: #020617;
+    --surface: rgba(15, 23, 42, 0.6);
+    --elevated: rgba(30, 41, 59, 0.6);
+    --elevated-hover: rgba(51, 65, 85, 0.65);
+    --line: rgba(30, 41, 59, 0.8);
+    --line-strong: rgba(51, 65, 85, 0.9);
+    --ink: #f1f5f9;
+    --ink-soft: #94a3b8;
+    --ink-faint: #64748b;
+    --panel: rgba(2, 6, 23, 0.95);
+    --code-bg: rgba(2, 6, 23, 0.7);
+    --glow-violet: rgba(139, 92, 246, 0.16);
+    --glow-sky: rgba(56, 189, 248, 0.12);
+    --scroll-thumb: rgba(71, 85, 105, 0.7);
+
     color-scheme: dark;
   }
 
   body {
-    @apply bg-slate-950 text-slate-100 antialiased;
+    @apply bg-canvas text-ink antialiased;
     background-image:
-      radial-gradient(60rem 40rem at 15% -10%, rgba(139, 92, 246, 0.16), transparent 60%),
-      radial-gradient(50rem 40rem at 110% 10%, rgba(56, 189, 248, 0.12), transparent 55%);
+      radial-gradient(60rem 40rem at 15% -10%, var(--glow-violet), transparent 60%),
+      radial-gradient(50rem 40rem at 110% 10%, var(--glow-sky), transparent 55%);
     background-attachment: fixed;
+    transition: background-color 0.2s ease, color 0.2s ease;
   }
 
   ::selection {
-    @apply bg-violet-500/40 text-white;
+    @apply bg-violet-400/40 text-ink dark:text-white;
   }
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgb(71 85 105 / 0.7) transparent;
+    scrollbar-color: var(--scroll-thumb) transparent;
   }
 
   ::-webkit-scrollbar {
@@ -101,13 +161,9 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply rounded-full bg-slate-600/60;
+    background-color: var(--scroll-thumb);
+    border-radius: 9999px;
     border: 3px solid transparent;
-    background-clip: content-box;
-  }
-
-  ::-webkit-scrollbar-thumb:hover {
-    @apply bg-slate-500/80;
     background-clip: content-box;
   }
 }
@@ -118,81 +174,83 @@
 @layer components {
   .btn {
     @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl
-      border border-slate-700/70 bg-slate-800/60 px-3.5 py-2 text-sm font-medium
-      text-slate-200 shadow-sm transition
-      hover:border-slate-600 hover:bg-slate-700/60
+      border border-line bg-elevated px-3.5 py-2 text-sm font-medium
+      text-ink shadow-sm transition
+      hover:border-line-strong hover:bg-elevated-hover
       focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70
       disabled:cursor-not-allowed disabled:opacity-40;
   }
 
   .btn-primary {
-    @apply border-transparent text-white shadow-lg shadow-violet-950/40
+    @apply border-transparent text-white shadow-lg shadow-violet-950/25
       bg-gradient-to-br from-violet-500 to-indigo-500
       hover:from-violet-400 hover:to-indigo-400
-      disabled:from-slate-700 disabled:to-slate-700 disabled:text-slate-400
-      disabled:shadow-none;
+      disabled:from-slate-300 disabled:to-slate-300 disabled:text-slate-500
+      dark:disabled:from-slate-700 dark:disabled:to-slate-700
+      dark:disabled:text-slate-400 disabled:shadow-none;
   }
 
   .btn-danger {
-    @apply border-rose-500/30 bg-rose-500/10 text-rose-300
-      hover:border-rose-400/50 hover:bg-rose-500/20;
+    @apply border-rose-500/30 bg-rose-500/10 text-rose-600
+      hover:border-rose-400/50 hover:bg-rose-500/20 dark:text-rose-300;
   }
 
   .btn-ghost {
-    @apply border-transparent bg-transparent text-slate-400 shadow-none
-      hover:bg-slate-800/70 hover:text-slate-100;
+    @apply border-transparent bg-transparent text-ink-soft shadow-none
+      hover:bg-elevated hover:text-ink;
   }
 
   .icon-btn {
     @apply inline-flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center
-      rounded-lg border border-transparent text-slate-400 transition
-      hover:bg-slate-800/80 hover:text-slate-100
+      rounded-lg border border-transparent text-ink-soft transition
+      hover:bg-elevated hover:text-ink
       focus:outline-none focus-visible:ring-2 focus-visible:ring-violet-400/70;
   }
 
   .card {
-    @apply rounded-2xl border border-slate-800/80 bg-slate-900/60 shadow-xl
-      shadow-slate-950/40 backdrop-blur;
+    @apply rounded-2xl border border-line bg-surface shadow-lg shadow-black/5
+      backdrop-blur dark:shadow-xl dark:shadow-slate-950/40;
   }
 
   .chip {
-    @apply inline-flex items-center gap-1.5 rounded-full border border-slate-700/60
-      bg-slate-800/50 px-2.5 py-1 text-xs font-medium text-slate-400;
+    @apply inline-flex items-center gap-1.5 rounded-full border border-line
+      bg-elevated px-2.5 py-1 text-xs font-medium text-ink-soft;
   }
 
   .field {
-    @apply w-full rounded-xl border border-slate-700/70 bg-slate-900/70 px-3 py-2
-      text-sm text-slate-100 placeholder:text-slate-500 transition
+    @apply w-full rounded-xl border border-line-strong bg-elevated px-3 py-2
+      text-sm text-ink placeholder:text-ink-faint transition
       focus:border-violet-400/70 focus:outline-none focus:ring-2
       focus:ring-violet-400/25;
   }
 
   .tab {
     @apply relative cursor-pointer rounded-lg px-3 py-1.5 text-sm font-medium
-      text-slate-400 transition hover:text-slate-200;
+      text-ink-soft transition hover:text-ink;
   }
 
   .tab-active {
-    @apply bg-slate-800/80 text-white shadow-sm;
+    @apply bg-white text-ink shadow-sm dark:bg-elevated;
   }
 
   .bubble {
     @apply max-w-[min(46rem,88%)] rounded-2xl px-4 py-3 text-[0.95rem]
-      leading-relaxed shadow-lg animate-fade-up;
+      leading-relaxed shadow-md shadow-black/5 animate-fade-up
+      dark:shadow-lg dark:shadow-slate-950/40;
   }
 
   .bubble-user {
     @apply rounded-br-md bg-gradient-to-br from-violet-600 to-indigo-600
-      text-white shadow-violet-950/40;
+      text-white shadow-violet-950/25;
   }
 
   .bubble-assistant {
-    @apply rounded-bl-md border border-slate-800/80 bg-slate-900/70 text-slate-100
-      shadow-slate-950/40;
+    @apply rounded-bl-md border border-line bg-surface text-ink;
   }
 
   .bubble-error {
-    @apply rounded-bl-md border border-rose-500/40 bg-rose-500/10 text-rose-200;
+    @apply rounded-bl-md border border-rose-500/40 bg-rose-500/10 text-rose-600
+      dark:text-rose-200;
   }
 
   .markdown p {
@@ -200,30 +258,31 @@
   }
 
   .markdown strong {
-    @apply font-semibold text-white;
+    @apply font-semibold text-ink;
   }
 
   .markdown em {
-    @apply italic text-slate-200;
+    @apply italic text-ink-soft;
   }
 
   .markdown a {
-    @apply font-medium text-violet-300 underline decoration-violet-400/40
-      underline-offset-2 hover:text-violet-200;
+    @apply font-medium text-violet-600 underline decoration-violet-400/40
+      underline-offset-2 hover:text-violet-500 dark:text-violet-300
+      dark:hover:text-violet-200;
   }
 
   .markdown code {
-    @apply rounded-md border border-slate-700/60 bg-slate-950/70 px-1.5 py-0.5
-      font-mono text-[0.82em] text-sky-200;
+    @apply rounded-md border border-line bg-code px-1.5 py-0.5 font-mono
+      text-[0.82em] text-sky-700 dark:text-sky-200;
   }
 
   .markdown pre {
-    @apply my-3 overflow-x-auto rounded-xl border border-slate-800 bg-slate-950/80
-      p-3.5 text-[0.85rem] leading-relaxed;
+    @apply my-3 overflow-x-auto rounded-xl border border-line bg-code p-3.5
+      text-[0.85rem] leading-relaxed;
   }
 
   .markdown pre code {
-    @apply border-0 bg-transparent p-0 text-slate-200;
+    @apply border-0 bg-transparent p-0 text-ink-soft;
   }
 
   .markdown ul {
@@ -235,24 +294,24 @@
   }
 
   .log-line {
-    @apply flex gap-2 border-b border-slate-900/60 px-2 py-1.5 font-mono
+    @apply flex gap-2 border-b border-line px-2 py-1.5 font-mono
       text-[0.72rem] leading-relaxed;
   }
 
   .log-debug {
-    @apply text-slate-500;
+    @apply text-ink-faint;
   }
 
   .log-info {
-    @apply text-sky-300;
+    @apply text-sky-700 dark:text-sky-300;
   }
 
   .log-warning {
-    @apply text-amber-300;
+    @apply text-amber-700 dark:text-amber-300;
   }
 
   .log-error {
-    @apply text-rose-300;
+    @apply text-rose-700 dark:text-rose-300;
   }
 }
 

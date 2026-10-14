@@ -8,8 +8,9 @@
 // literally somewhere in the source, so keep this safelist comment:
 // log-debug log-info log-warning log-error bubble-user bubble-assistant
 // bubble-error animate-bounce-dot animate-blink animate-fade-up animate-slide-in
-// bg-emerald-400 bg-amber-400 bg-slate-500 bg-rose-400 text-rose-300
-// text-emerald-300 text-white
+// bg-emerald-500 dark:bg-emerald-400 bg-amber-500 dark:bg-amber-400
+// bg-rose-500 dark:bg-rose-400 bg-ink-faint text-ink
+// text-rose-600 dark:text-rose-300 text-emerald-600 dark:text-emerald-300
 
 const API_BASE = (document.querySelector('meta[name="leyna-api-base"]')?.content ?? "")
   .trim()
@@ -33,6 +34,7 @@ const dom = {
   stop: $("#stop-btn"),
   newChat: $("#new-chat-btn"),
   debugBtn: $("#debug-btn"),
+  themeBtn: $("#theme-btn"),
   statusDot: $("#status-dot"),
   statusText: $("#status-text"),
   drawer: $("#debug-drawer"),
@@ -138,7 +140,9 @@ function toast(message, kind = "info") {
   const node = el(
     "div",
     `card pointer-events-auto animate-slide-in px-4 py-2 text-sm ${
-      kind === "error" ? "border-rose-500/40 text-rose-200" : "text-slate-200"
+      kind === "error"
+        ? "border-rose-500/40 text-rose-600 dark:text-rose-200"
+        : "text-ink"
     }`,
   );
   node.textContent = message;
@@ -191,13 +195,13 @@ async function refreshHealth() {
   }
 
   const { online, configured, model } = state.health;
-  let dot = "bg-slate-500";
+  let dot = "bg-ink-faint";
   let label = "Backend offline";
   if (online && configured) {
-    dot = "bg-emerald-400";
+    dot = "bg-emerald-500 dark:bg-emerald-400";
     label = model || "Ready";
   } else if (online) {
-    dot = "bg-amber-400";
+    dot = "bg-amber-500 dark:bg-amber-400";
     label = "No API key";
   }
   dom.statusDot.className = `h-2 w-2 rounded-full ${dot}`;
@@ -209,9 +213,9 @@ async function refreshHealth() {
 /* -------------------------------------------------------------------------- */
 const typingIndicator = () => `
   <span class="inline-flex items-center gap-1 py-1">
-    <span class="h-1.5 w-1.5 rounded-full bg-slate-500 animate-bounce-dot"></span>
-    <span class="h-1.5 w-1.5 rounded-full bg-slate-500 animate-bounce-dot [animation-delay:150ms]"></span>
-    <span class="h-1.5 w-1.5 rounded-full bg-slate-500 animate-bounce-dot [animation-delay:300ms]"></span>
+    <span class="h-1.5 w-1.5 rounded-full bg-ink-faint animate-bounce-dot"></span>
+    <span class="h-1.5 w-1.5 rounded-full bg-ink-faint animate-bounce-dot [animation-delay:150ms]"></span>
+    <span class="h-1.5 w-1.5 rounded-full bg-ink-faint animate-bounce-dot [animation-delay:300ms]"></span>
   </span>`;
 
 const cursor = () =>
@@ -225,7 +229,7 @@ function createMessageNode(message) {
   const content = el("div", "markdown");
   bubble.appendChild(content);
 
-  const meta = el("div", "flex items-center gap-2 px-1 text-[0.68rem] text-slate-500");
+  const meta = el("div", "flex items-center gap-2 px-1 text-[0.68rem] text-ink-faint");
 
   row.append(bubble, meta);
   message.node = { row, bubble, content, meta };
@@ -248,7 +252,8 @@ function paintMessage(message) {
   }
 
   const chips = [];
-  if (message.error) chips.push(`<span class="text-rose-400">⚠ ${escapeHtml(message.error)}</span>`);
+  if (message.error)
+    chips.push(`<span class="text-rose-600 dark:text-rose-400">⚠ ${escapeHtml(message.error)}</span>`);
   if (message.tokens) {
     chips.push(
       `<span class="chip !py-0.5" title="prompt / completion tokens">↑ ${fmt(
@@ -256,10 +261,10 @@ function paintMessage(message) {
       )} · ↓ ${fmt(message.tokens.completion)}</span>`,
     );
   }
-  if (message.model) chips.push(`<span class="text-slate-600">${escapeHtml(message.model)}</span>`);
+  if (message.model) chips.push(`<span class="text-ink-faint">${escapeHtml(message.model)}</span>`);
   if (message.role === "assistant" && message.content && !message.pending) {
     chips.push(
-      `<button type="button" data-copy="${message.id}" class="cursor-pointer transition hover:text-slate-300">Copy</button>`,
+      `<button type="button" data-copy="${message.id}" class="cursor-pointer transition hover:text-ink">Copy</button>`,
     );
   }
   meta.innerHTML = chips.join("");
@@ -488,7 +493,7 @@ function resetConversation() {
 /* -------------------------------------------------------------------------- */
 /* Debug drawer                                                               */
 /* -------------------------------------------------------------------------- */
-function setFeedback(text, tone = "text-slate-400") {
+function setFeedback(text, tone = "text-ink-soft") {
   dom.keyFeedback.className = `min-h-4 text-xs ${tone}`;
   dom.keyFeedback.textContent = text;
 }
@@ -539,24 +544,24 @@ async function refreshDebug() {
   }
 }
 
-const statCard = (label, value, tone = "text-white") => `
+const statCard = (label, value, tone = "text-ink") => `
   <div class="card p-3">
-    <p class="text-[0.62rem] font-semibold tracking-wide text-slate-500 uppercase">${label}</p>
+    <p class="text-[0.62rem] font-semibold tracking-wide text-ink-faint uppercase">${label}</p>
     <p class="mt-1 text-lg font-semibold ${tone}">${value}</p>
   </div>`;
 
 function usageRow(record) {
   const dot = record.ok
-    ? '<span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>'
-    : '<span class="h-1.5 w-1.5 rounded-full bg-rose-400"></span>';
-  return `<tr class="text-slate-300" title="${escapeHtml(record.error || record.model)}">
-      <td class="px-3 py-2 font-mono text-[0.68rem] whitespace-nowrap text-slate-500">${clockTime(record.time)}</td>
+    ? '<span class="h-1.5 w-1.5 rounded-full bg-emerald-500 dark:bg-emerald-400"></span>'
+    : '<span class="h-1.5 w-1.5 rounded-full bg-rose-500 dark:bg-rose-400"></span>';
+  return `<tr class="text-ink-soft" title="${escapeHtml(record.error || record.model)}">
+      <td class="px-3 py-2 font-mono text-[0.68rem] whitespace-nowrap text-ink-faint">${clockTime(record.time)}</td>
       <td class="px-3 py-2">
         <span class="inline-flex items-center gap-1.5 whitespace-nowrap">${dot}${escapeHtml(record.endpoint)}</span>
       </td>
       <td class="px-3 py-2 text-right font-mono">${fmt(record.prompt_tokens)}</td>
       <td class="px-3 py-2 text-right font-mono">${fmt(record.completion_tokens)}</td>
-      <td class="px-3 py-2 text-right font-mono text-slate-500">${Math.round(record.latency_ms)}</td>
+      <td class="px-3 py-2 text-right font-mono text-ink-faint">${Math.round(record.latency_ms)}</td>
     </tr>`;
 }
 
@@ -568,11 +573,11 @@ async function renderUsage() {
     statCard("Prompt tokens", fmt(totals.prompt_tokens)),
     statCard("Reply tokens", fmt(totals.completion_tokens)),
     statCard("Total tokens", fmt(totals.total_tokens)),
-    statCard("Errors", fmt(totals.errors), totals.errors ? "text-rose-300" : "text-white"),
+    statCard("Errors", fmt(totals.errors), totals.errors ? "text-rose-600 dark:text-rose-300" : "text-ink"),
     statCard(
       "Success rate",
       totals.requests ? `${Math.round((totals.ok / totals.requests) * 100)}%` : "—",
-      totals.requests && totals.errors === 0 ? "text-emerald-300" : "text-white",
+      totals.requests && totals.errors === 0 ? "text-emerald-600 dark:text-emerald-300" : "text-ink",
     ),
   ].join("");
   dom.usageBody.innerHTML = data.records.map(usageRow).join("");
@@ -583,7 +588,7 @@ function logLine(record) {
   const level = (record.level || "INFO").toUpperCase();
   const node = el("div", `log-line log-${level.toLowerCase()}`);
   node.innerHTML = `
-    <span class="shrink-0 text-slate-600">${clockTime(record.time)}</span>
+    <span class="shrink-0 text-ink-faint">${clockTime(record.time)}</span>
     <span class="w-16 shrink-0">${escapeHtml(level)}</span>
     <span class="min-w-0 flex-1 break-words whitespace-pre-wrap">${escapeHtml(record.message)}</span>`;
   return node;
@@ -703,10 +708,10 @@ dom.keyForm.addEventListener("submit", async (event) => {
     dom.keyPersist.checked = false;
     await renderKeyState();
     await refreshHealth();
-    setFeedback("API key updated.", "text-emerald-300");
+    setFeedback("API key updated.", "text-emerald-600 dark:text-emerald-300");
     toast("API key updated.");
   } catch (error) {
-    setFeedback(error.message, "text-rose-300");
+    setFeedback(error.message, "text-rose-600 dark:text-rose-300");
   } finally {
     dom.keyApply.disabled = false;
   }
@@ -718,9 +723,9 @@ dom.keyRevert.addEventListener("click", async () => {
     await debugRequest("/api-key", { method: "DELETE" });
     await renderKeyState();
     await refreshHealth();
-    setFeedback("Reverted to the .env key.", "text-emerald-300");
+    setFeedback("Reverted to the .env key.", "text-emerald-600 dark:text-emerald-300");
   } catch (error) {
-    setFeedback(error.message, "text-rose-300");
+    setFeedback(error.message, "text-rose-600 dark:text-rose-300");
   } finally {
     dom.keyRevert.disabled = false;
   }
@@ -734,9 +739,64 @@ dom.adminToken.addEventListener("input", () => {
 });
 
 /* -------------------------------------------------------------------------- */
+/* Theme                                                                      */
+/* -------------------------------------------------------------------------- */
+// The initial theme class is applied by an inline script in <head>, before the
+// first paint, to avoid a flash of the wrong colours. From here we only keep
+// the toggle in sync and persist explicit choices.
+const THEME_KEY = "leyna.theme";
+const darkQuery = window.matchMedia("(prefers-color-scheme: dark)");
+
+function savedTheme() {
+  try {
+    return localStorage.getItem(THEME_KEY);
+  } catch (error) {
+    return null;
+  }
+}
+
+function isDark() {
+  return document.documentElement.classList.contains("dark");
+}
+
+function applyTheme(theme, { persist = false } = {}) {
+  document.documentElement.classList.toggle("dark", theme === "dark");
+  if (persist) {
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch (error) {
+      /* storage unavailable — the choice just won't survive a reload */
+    }
+  }
+  syncThemeButton();
+}
+
+function syncThemeButton() {
+  const dark = isDark();
+  const label = dark ? "Switch to light mode" : "Switch to dark mode";
+  dom.themeBtn.setAttribute("aria-pressed", String(dark));
+  dom.themeBtn.title = label;
+  dom.themeBtn.setAttribute("aria-label", label);
+}
+
+function initTheme() {
+  syncThemeButton();
+
+  dom.themeBtn.addEventListener("click", () => {
+    applyTheme(isDark() ? "light" : "dark", { persist: true });
+  });
+
+  // Follow the OS only while the user hasn't made an explicit choice.
+  darkQuery.addEventListener("change", (event) => {
+    if (!savedTheme()) applyTheme(event.matches ? "dark" : "light");
+  });
+}
+
+/* -------------------------------------------------------------------------- */
 /* Boot                                                                       */
 /* -------------------------------------------------------------------------- */
 function init() {
+  initTheme();
   loadHistory();
   state.messages.forEach(mountMessage);
   syncEmptyState();

@@ -8,6 +8,9 @@ A personal assistant split into three parts:
 | `web/`      | HTML + Tailwind CSS chat UI. **Served by the backend at `/`.**        | [web/README.md](web/README.md)           |
 | `frontend/` | Flutter (web) chat UI that talks to the backend.                     | [frontend/README.md](frontend/README.md) |
 
+Both UIs ship a **light and a dark theme** with a toggle, and each remembers
+your choice (the web UI falls back to your OS setting on a first visit).
+
 ## Quick start
 
 ```bash

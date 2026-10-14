@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'package:leyna_frontend/main.dart';
 import 'package:leyna_frontend/src/api/chat_backend.dart';
 import 'package:leyna_frontend/src/api/debug_api.dart';
 import 'package:leyna_frontend/src/models/chat_message.dart';
 import 'package:leyna_frontend/src/models/debug.dart';
 import 'package:leyna_frontend/src/screens/chat_screen.dart';
 import 'package:leyna_frontend/src/screens/debug_panel.dart';
+import 'package:leyna_frontend/src/theme.dart';
 
 /// A stand-in chat backend so the UI can be tested without a running server.
 class _FakeBackend implements ChatBackend {
@@ -199,5 +202,62 @@ void main() {
     expect(find.textContaining('debug-override'), findsOneWidget);
 
     await tester.pumpWidget(const SizedBox());
+  });
+
+  testWidgets('app bar toggle switches between light and dark', (tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{});
+    final controller = ThemeController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(LeynaApp(
+      backend: _FakeBackend(),
+      debugBackend: _FakeDebugBackend(),
+      themeController: controller,
+    ));
+    await tester.pumpAndSettle();
+
+    // No saved choice yet: the app follows the OS (light in tests).
+    expect(controller.value, ThemeMode.system);
+    expect(
+      Theme.of(tester.element(find.byType(ChatScreen))).brightness,
+      Brightness.light,
+    );
+    expect(find.byIcon(Icons.dark_mode_outlined), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.dark_mode_outlined));
+    await tester.pumpAndSettle();
+
+    expect(controller.value, ThemeMode.dark);
+    expect(
+      Theme.of(tester.element(find.byType(ChatScreen))).brightness,
+      Brightness.dark,
+    );
+    // The icon flips so the next tap returns to light.
+    expect(find.byIcon(Icons.light_mode_outlined), findsOneWidget);
+
+    await tester.tap(find.byIcon(Icons.light_mode_outlined));
+    await tester.pumpAndSettle();
+    expect(controller.value, ThemeMode.light);
+  });
+
+  testWidgets('a saved preference is restored on startup', (tester) async {
+    SharedPreferences.setMockInitialValues(<String, Object>{
+      ThemeController.preferenceKey: 'dark',
+    });
+    final controller = ThemeController();
+    addTearDown(controller.dispose);
+
+    await tester.pumpWidget(LeynaApp(
+      backend: _FakeBackend(),
+      debugBackend: _FakeDebugBackend(),
+      themeController: controller,
+    ));
+    await tester.pumpAndSettle();
+
+    expect(controller.value, ThemeMode.dark);
+    expect(
+      Theme.of(tester.element(find.byType(ChatScreen))).brightness,
+      Brightness.dark,
+    );
   });
 }

@@ -92,9 +92,10 @@ These endpoints require `DEBUG_ENABLED=true` on the backend (the default).
 
 ```
 lib/
-  main.dart                       # app entry
+  main.dart                       # app entry (wires the theme controller)
   src/
     config.dart                   # API_BASE_URL (dart-define)
+    theme.dart                    # light/dark themes + ThemeController
     models/chat_message.dart      # ChatMessage + role
     models/debug.dart             # debug API models
     api/exceptions.dart           # ChatApiException
@@ -107,6 +108,20 @@ test/
   widget_test.dart                # UI tests with fake backends
 web/                              # web app shell (index.html, manifest)
 ```
+
+## Theming
+
+The app has both a light and a dark theme, seeded from the same colour
+(`#6750A4`), and a toggle in the app bar (the icon shows which theme you would
+switch *to*).
+
+`ThemeController` holds a `ThemeMode` and starts at `ThemeMode.system`, so the
+app follows the OS until the user picks a theme; that choice is then saved with
+`shared_preferences` and restored on the next launch. Storage errors are
+swallowed, so the app still runs if `shared_preferences` is unavailable (as in a
+bare widget test).
+
+The widget tests cover the toggle and the restore-on-startup path.
 
 ## Notes
 

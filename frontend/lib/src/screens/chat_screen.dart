@@ -3,18 +3,27 @@ import 'package:flutter/material.dart';
 import '../api/chat_backend.dart';
 import '../api/debug_api.dart';
 import '../models/chat_message.dart';
+import '../theme.dart';
 import '../widgets/message_bubble.dart';
 import 'debug_panel.dart';
 
 /// The main chat screen: a scrolling transcript plus a composer.
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key, this.backend, this.debugBackend});
+  const ChatScreen({
+    super.key,
+    this.backend,
+    this.debugBackend,
+    this.themeController,
+  });
 
   /// Injectable for tests; defaults to a real [ChatApi].
   final ChatBackend? backend;
 
   /// Injectable for tests; defaults to a real [DebugApi].
   final DebugBackend? debugBackend;
+
+  /// When provided, a light/dark toggle is shown in the app bar.
+  final ThemeController? themeController;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -106,6 +115,8 @@ class _ChatScreenState extends State<ChatScreen> {
         actions: [
           _StatusIndicator(health: _health),
           const SizedBox(width: 4),
+          if (widget.themeController != null)
+            _ThemeToggleButton(controller: widget.themeController!),
           TextButton.icon(
             onPressed: _toggleDebug,
             icon: const Icon(Icons.bug_report, size: 18),
@@ -210,6 +221,24 @@ class _EmptyState extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// Flips the app between light and dark; the icon shows what comes next.
+class _ThemeToggleButton extends StatelessWidget {
+  const _ThemeToggleButton({required this.controller});
+
+  final ThemeController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    final isDark = brightness == Brightness.dark;
+    return IconButton(
+      tooltip: isDark ? 'Switch to light mode' : 'Switch to dark mode',
+      icon: Icon(isDark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
+      onPressed: () => controller.toggle(brightness),
     );
   }
 }

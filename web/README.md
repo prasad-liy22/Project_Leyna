@@ -11,6 +11,8 @@ at `/`**, so there is nothing to install at runtime and no second dev server.
   links) — everything is HTML-escaped before any markup is added.
 - Per-message token counts, a stop button, copy-to-clipboard, and a
   conversation persisted in `localStorage`.
+- A **light/dark theme toggle** in the header. The choice is remembered; on a
+  first visit the UI follows the OS preference.
 - A **debug drawer** with three tabs, backed by the `/debug/*` API:
   - **Usage** — cumulative token totals + a per-request table.
   - **Logs** — live server console (polled every 2 s, incremental via `after`).
@@ -22,6 +24,7 @@ at `/`**, so there is nothing to install at runtime and no second dev server.
 | Piece      | Choice                                                        |
 | ---------- | ------------------------------------------------------------- |
 | CSS        | Tailwind CSS v4, CSS-first config (`@theme`, `@source`)        |
+| Theming    | Semantic tokens (`--ink`, `--surface`, …) swapped per theme     |
 | JS         | Vanilla ES modules — no framework, no runtime dependencies     |
 | Build      | `@tailwindcss/cli` (dev-only) via npm                          |
 
@@ -76,6 +79,39 @@ elsewhere, edit the meta tag in `src/index.html` and rebuild:
 Because the backend enables CORS, cross-origin use works as long as the origin
 is allowed (`CORS_ORIGINS`).
 
+## Theming
+
+Colours are never hard-coded per component. `src/input.css` defines a small set
+of **semantic tokens** and maps them to Tailwind colour names with
+`@theme inline`, so `text-ink`, `bg-surface`, `border-line`, … all exist:
+
+```css
+@theme inline {
+  --color-ink: var(--ink); /* → text-ink, bg-ink, border-ink, … */
+}
+
+:root  { --ink: #0f172a; }  /* light */
+.dark  { --ink: #f1f5f9; }  /* dark  */
+```
+
+Tailwind v4 emits `color: var(--ink)` inside a utility rather than copying the
+value, so redefining a token under `.dark` re-themes every element that uses it
+— no duplicated class names, no `dark:` on every utility.
+
+The `dark` variant is **class-based**, not media-query based:
+
+```css
+@custom-variant dark (&:where(.dark, .dark *));
+```
+
+That lets an explicit user choice win over the OS setting. A tiny inline script
+in `<head>` sets the class before the first paint, so there is no flash of the
+wrong theme; `app.js` then keeps the toggle's icon, `aria-pressed` and
+`localStorage` in sync, and only follows the OS while no explicit choice exists.
+
+To add a themed colour, add the token in both `:root` and `.dark`, map it in
+`@theme inline`, then use the resulting utility.
+
 ## Smoke test
 
 `smoke.mjs` drives the real UI in headless Chrome over the DevTools Protocol
@@ -93,7 +129,8 @@ cd web && npm run smoke
 ```
 
 It checks streaming + Markdown rendering, the token chip, history persistence,
-every debug tab, Escape-to-close, and New chat. Exits non-zero on failure.
+the light/dark toggle, every debug tab, Escape-to-close, and New chat. Exits
+non-zero on failure.
 
 ## Notes
 

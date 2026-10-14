@@ -8,6 +8,23 @@
     <meta name="leyna-api-base" content="" />
     <title>Leyna — Personal Assistant</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ctext y='26' font-size='26'%3E%F0%9F%92%AB%3C/text%3E%3C/svg%3E" />
+
+    <!-- Runs before first paint so the correct theme is applied without a flash. -->
+    <script>
+      (function () {
+        var saved = null;
+        try {
+          saved = localStorage.getItem("leyna.theme");
+        } catch (error) {
+          /* storage unavailable — fall back to the OS preference */
+        }
+        var dark = saved
+          ? saved === "dark"
+          : window.matchMedia("(prefers-color-scheme: dark)").matches;
+        document.documentElement.classList.toggle("dark", dark);
+      })();
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -28,8 +45,8 @@
           💫
         </div>
         <div class="min-w-0 flex-1">
-          <h1 class="truncate text-base font-semibold tracking-tight text-white">Leyna</h1>
-          <p class="truncate text-xs text-slate-500">Your personal assistant</p>
+          <h1 class="truncate text-base font-semibold tracking-tight text-ink">Leyna</h1>
+          <p class="truncate text-xs text-ink-faint">Your personal assistant</p>
         </div>
 
         <div
@@ -37,9 +54,49 @@
           class="chip hidden sm:inline-flex"
           title="Backend connection status"
         >
-          <span id="status-dot" class="h-2 w-2 rounded-full bg-amber-400"></span>
+          <span id="status-dot" class="h-2 w-2 rounded-full bg-amber-500 dark:bg-amber-400"></span>
           <span id="status-text">Connecting…</span>
         </div>
+
+        <button
+          id="theme-btn"
+          class="icon-btn"
+          type="button"
+          title="Toggle dark mode"
+          aria-label="Toggle dark mode"
+          aria-pressed="false"
+        >
+          <!-- Sun: shown in dark mode (click to go light). -->
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            class="hidden h-5 w-5 dark:block"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M12 3v2.25m6.364.386-1.591 1.591M21 12h-2.25m-.386 6.364-1.591-1.591M12 18.75V21m-4.773-4.227-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0Z"
+            />
+          </svg>
+          <!-- Moon: shown in light mode (click to go dark). -->
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.8"
+            class="block h-5 w-5 dark:hidden"
+            aria-hidden="true"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              d="M21.752 15.002A9.72 9.72 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998Z"
+            />
+          </svg>
+        </button>
 
         <button id="new-chat-btn" class="icon-btn" type="button" title="New chat" aria-label="New chat">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5">
@@ -62,8 +119,8 @@
             💫
           </div>
           <div class="space-y-2">
-            <h2 class="text-xl font-semibold text-white">Hi, I'm Leyna.</h2>
-            <p class="text-sm text-slate-400">
+            <h2 class="text-xl font-semibold text-ink">Hi, I'm Leyna.</h2>
+            <p class="text-sm text-ink-soft">
               Ask me anything — I'll stream the answer back as I write it.
             </p>
           </div>
@@ -91,7 +148,7 @@
               id="composer-input"
               rows="1"
               placeholder="Message Leyna…  (Enter to send, Shift+Enter for a new line)"
-              class="max-h-40 flex-1 resize-none bg-transparent px-2 py-2 text-[0.95rem] text-slate-100 placeholder:text-slate-500 focus:outline-none"
+              class="max-h-40 flex-1 resize-none bg-transparent px-2 py-2 text-[0.95rem] text-ink placeholder:text-ink-faint focus:outline-none"
               autocomplete="off"
             ></textarea>
 
@@ -108,7 +165,7 @@
               </svg>
             </button>
           </div>
-          <p class="mt-2 text-center text-[0.7rem] text-slate-600">
+          <p class="mt-2 text-center text-[0.7rem] text-ink-faint">
             Leyna can make mistakes. Verify important information.
           </p>
         </form>
@@ -118,24 +175,24 @@
     <!-- ========================= Debug drawer ========================= -->
     <div
       id="debug-overlay"
-      class="fixed inset-0 z-40 hidden bg-slate-950/70 backdrop-blur-sm"
+      class="fixed inset-0 z-40 hidden bg-slate-950/50 backdrop-blur-sm dark:bg-slate-950/70"
       aria-hidden="true"
     ></div>
 
     <aside
       id="debug-drawer"
-      class="fixed inset-y-0 right-0 z-50 flex w-full max-w-md translate-x-full flex-col border-l border-slate-800 bg-slate-950/95 shadow-2xl transition-transform duration-300 ease-out"
+      class="fixed inset-y-0 right-0 z-50 flex w-full max-w-md translate-x-full flex-col border-l border-line bg-panel shadow-2xl transition-transform duration-300 ease-out"
       aria-label="Debug panel"
       aria-hidden="true"
     >
-      <div class="flex items-center gap-2 border-b border-slate-800 px-4 py-3">
-        <span class="grid h-8 w-8 place-items-center rounded-lg bg-amber-500/15 text-amber-300">
+      <div class="flex items-center gap-2 border-b border-line px-4 py-3">
+        <span class="grid h-8 w-8 place-items-center rounded-lg bg-amber-500/15 text-amber-600 dark:text-amber-300">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-4 w-4">
             <path stroke-linecap="round" stroke-linejoin="round" d="M6 13.5V3.75m0 9.75a1.5 1.5 0 0 1 0 3m0-3a1.5 1.5 0 0 0 0 3m0 3.75V16.5m12-3V3.75m0 9.75a1.5 1.5 0 0 1 0 3m0-3a1.5 1.5 0 0 0 0 3m0 3.75V16.5m-6-9V3.75m0 3.75a1.5 1.5 0 0 1 0 3m0-3a1.5 1.5 0 0 0 0 3m0 9.75V10.5" />
           </svg>
         </span>
-        <h2 class="flex-1 text-sm font-semibold text-white">Debug</h2>
-        <span id="debug-status" class="text-[0.7rem] text-slate-500"></span>
+        <h2 class="flex-1 text-sm font-semibold text-ink">Debug</h2>
+        <span id="debug-status" class="text-[0.7rem] text-ink-faint"></span>
         <button id="debug-close" class="icon-btn" type="button" aria-label="Close debug panel">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5">
             <path stroke-linecap="round" stroke-linejoin="round" d="M6 18 18 6M6 6l12 12" />
@@ -143,7 +200,7 @@
         </button>
       </div>
 
-      <div class="flex gap-1 border-b border-slate-800 px-3 py-2">
+      <div class="flex gap-1 border-b border-line px-3 py-2">
         <button class="tab tab-active" data-tab="usage" type="button">Usage</button>
         <button class="tab" data-tab="logs" type="button">Logs</button>
         <button class="tab" data-tab="api-key" type="button">API key</button>
@@ -155,7 +212,7 @@
           <div id="usage-totals" class="grid grid-cols-2 gap-2 sm:grid-cols-3"></div>
 
           <div class="flex items-center gap-2">
-            <h3 class="flex-1 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+            <h3 class="flex-1 text-xs font-semibold tracking-wide text-ink-faint uppercase">
               Recent requests
             </h3>
             <button id="usage-clear" class="btn btn-ghost !px-2 !py-1 text-xs" type="button">Clear</button>
@@ -163,7 +220,7 @@
 
           <div class="card overflow-hidden">
             <table class="w-full text-left text-xs">
-              <thead class="bg-slate-900/80 text-slate-500">
+              <thead class="bg-elevated text-ink-faint">
                 <tr>
                   <th class="px-3 py-2 font-medium">Time</th>
                   <th class="px-3 py-2 font-medium">Endpoint</th>
@@ -172,9 +229,9 @@
                   <th class="px-3 py-2 text-right font-medium">ms</th>
                 </tr>
               </thead>
-              <tbody id="usage-table-body" class="divide-y divide-slate-800/70"></tbody>
+              <tbody id="usage-table-body" class="divide-y divide-line"></tbody>
             </table>
-            <p id="usage-empty" class="px-3 py-6 text-center text-xs text-slate-500">
+            <p id="usage-empty" class="px-3 py-6 text-center text-xs text-ink-faint">
               No requests recorded yet.
             </p>
           </div>
@@ -199,11 +256,11 @@
 
           <div
             id="logs-console"
-            class="h-[26rem] overflow-y-auto rounded-xl border border-slate-800 bg-slate-950/90 p-1.5"
+            class="h-[26rem] overflow-y-auto rounded-xl border border-line bg-code p-1.5"
             role="log"
             aria-live="polite"
           >
-            <p id="logs-empty" class="px-2 py-6 text-center text-xs text-slate-500">
+            <p id="logs-empty" class="px-2 py-6 text-center text-xs text-ink-faint">
               Waiting for log output…
             </p>
           </div>
@@ -212,16 +269,16 @@
         <!-- --------------------------- API key ------------------------------ -->
         <section id="panel-api-key" class="hidden space-y-5">
           <div class="card space-y-1 p-4">
-            <p class="text-xs font-semibold tracking-wide text-slate-500 uppercase">Active key</p>
-            <p id="key-masked" class="font-mono text-sm text-slate-200">—</p>
-            <p class="text-xs text-slate-500">
-              Source: <span id="key-source" class="text-slate-400">—</span>
+            <p class="text-xs font-semibold tracking-wide text-ink-faint uppercase">Active key</p>
+            <p id="key-masked" class="font-mono text-sm text-ink">—</p>
+            <p class="text-xs text-ink-faint">
+              Source: <span id="key-source" class="text-ink-soft">—</span>
             </p>
           </div>
 
           <form id="key-form" class="space-y-3">
             <label class="block space-y-1.5">
-              <span class="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+              <span class="text-xs font-semibold tracking-wide text-ink-faint uppercase">
                 New API key
               </span>
               <input
@@ -234,9 +291,9 @@
               />
             </label>
 
-            <label class="flex items-center gap-2 text-xs text-slate-400">
+            <label class="flex items-center gap-2 text-xs text-ink-soft">
               <input id="key-persist" type="checkbox" class="accent-violet-500" />
-              Also write to <code class="font-mono text-slate-300">.env</code> (survives restart)
+              Also write to <code class="font-mono text-ink">.env</code> (survives restart)
             </label>
 
             <div class="flex gap-2">
@@ -249,8 +306,8 @@
             <p id="key-feedback" class="min-h-4 text-xs"></p>
           </form>
 
-          <label class="block space-y-1.5 border-t border-slate-800 pt-4">
-            <span class="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+          <label class="block space-y-1.5 border-t border-line pt-4">
+            <span class="text-xs font-semibold tracking-wide text-ink-faint uppercase">
               Admin token
             </span>
             <input
@@ -261,7 +318,7 @@
               placeholder="Only needed when ADMIN_TOKEN is set"
               class="field font-mono"
             />
-            <span class="block text-[0.7rem] text-slate-600">
+            <span class="block text-[0.7rem] text-ink-faint">
               Stored in this browser only; sent as <code class="font-mono">X-Admin-Token</code>.
             </span>
           </label>

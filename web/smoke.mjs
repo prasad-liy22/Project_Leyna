@@ -47,6 +47,29 @@ function pageTest() {
     const $ = (selector) => document.querySelector(selector);
     const out = {};
 
+    /* 0. Theme toggle: OS default (headless Chrome is light), then explicit choice. */
+    const themeBtn = $("#theme-btn");
+    const theme = () =>
+      document.documentElement.classList.contains("dark") ? "dark" : "light";
+    const bodyBg = () => getComputedStyle(document.body).backgroundColor;
+    const inkColor = () => getComputedStyle($("header h1")).color;
+
+    out.themeDefault = theme();
+    out.themeDefaultBg = bodyBg();
+    out.themeDefaultInk = inkColor();
+
+    themeBtn.click();
+    await sleep(350);
+    out.themeToggled = theme();
+    out.themeToggledBg = bodyBg();
+    out.themeToggledInk = inkColor();
+    out.themePersisted = localStorage.getItem("leyna.theme");
+    out.themeAriaPressed = themeBtn.getAttribute("aria-pressed");
+
+    themeBtn.click();
+    await sleep(350);
+    out.themeRestored = theme();
+
     /* 1. Streaming chat, with /chat/stream stubbed so nothing is billed. */
     const LF = String.fromCharCode(10);
     const SEP = LF + LF;
@@ -129,6 +152,13 @@ function pageTest() {
 }
 
 const EXPECTED = {
+  themeDefault: "light",
+  themeDefaultBg: "rgb(246, 247, 251)",
+  themeToggled: "dark",
+  themeToggledBg: "rgb(2, 6, 23)",
+  themePersisted: "dark",
+  themeAriaPressed: "true",
+  themeRestored: "light",
   sendEnabledWithText: true,
   messageCount: 2,
   userText: "ping",
@@ -157,6 +187,9 @@ function check(results) {
   }
   if (!["env", "debug-override", "unset"].includes(results.keySource)) {
     failures.push(`keySource: unexpected ${JSON.stringify(results.keySource)}`);
+  }
+  if (results.themeDefaultInk === results.themeToggledInk) {
+    failures.push(`themeInk: text colour did not change (${JSON.stringify(results.themeDefaultInk)})`);
   }
   return failures;
 }
@@ -242,7 +275,7 @@ async function main() {
       for (const failure of failures) console.error(`  - ${failure}`);
       process.exitCode = 1;
     } else {
-      console.log(`\n✓ all ${Object.keys(EXPECTED).length + 2} checks passed`);
+      console.log(`\n✓ all ${Object.keys(EXPECTED).length + 4} checks passed`);
     }
     ws.close();
   } finally {
