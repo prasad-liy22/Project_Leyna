@@ -42,6 +42,8 @@ tests/
 requirements.txt      # runtime dependencies
 requirements-dev.txt  # test dependencies
 .env.example          # template for your local .env
+vercel.json           # Vercel function config (FastAPI entrypoint + duration)
+VERCEL_DEPLOYMENT.md  # how to deploy this backend to Vercel
 ```
 
 Two UIs live in sibling folders and both talk to this API:
@@ -338,3 +340,16 @@ Two clients talk to this API over HTTP:
   `cd ../web && npm run build` after editing `web/src/`.
 - **Flutter** — [`../frontend/`](../frontend/README.md), a Flutter web client
   you run separately with `flutter run -d chrome`.
+
+## Deployment (Vercel)
+
+This backend runs on Vercel's native Python/FastAPI runtime with **no code
+changes** — Vercel auto-detects the `app` object in `app/main.py`. The only
+project-specific files are `vercel.json` (entrypoint + function duration) and
+the committed `requirements.txt`.
+
+The one setting that makes or breaks it is the Vercel **Root Directory**, which
+must be `backend`. See [`VERCEL_DEPLOYMENT.md`](VERCEL_DEPLOYMENT.md) for the
+dashboard settings, environment variables, the diagnosis of the `x-powered-by:
+Express` / `Cannot GET /health` response, troubleshooting, and serverless
+limitations (notably: short-term memory is per-instance and ephemeral).
