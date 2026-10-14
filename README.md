@@ -11,6 +11,11 @@ A personal assistant split into three parts:
 Both UIs ship a **light and a dark theme** with a toggle, and each remembers
 your choice (the web UI falls back to your OS setting on a first visit).
 
+The backend also keeps **short-term memory**: when a client sends a
+`conversation_id`, the server holds the transcript and sends the model only the
+newest slice that fits a token budget. See
+[backend/README.md](backend/README.md#short-term-memory).
+
 ## Quick start
 
 ```bash

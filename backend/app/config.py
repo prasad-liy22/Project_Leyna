@@ -43,6 +43,44 @@ class Settings(BaseSettings):
         "provide its own.",
     )
 
+    # --- Short-term memory --------------------------------------------------
+    # Requests are stateless unless they send a `conversation_id`; when they do,
+    # the server keeps the transcript and sends the model only the newest slice
+    # of it that fits `memory_token_budget`.
+    memory_enabled: bool = Field(
+        default=True,
+        description="Keep server-side short-term memory for requests that send "
+        "a conversation_id. When false every request is stateless.",
+    )
+    memory_token_budget: int = Field(
+        default=3000,
+        ge=200,
+        description="Approximate token budget for the transcript sent to the "
+        "model. Older messages are dropped once it is exceeded.",
+    )
+    memory_max_messages: int = Field(
+        default=60,
+        ge=2,
+        description="Maximum number of messages retained per conversation.",
+    )
+    memory_max_conversations: int = Field(
+        default=100,
+        ge=1,
+        description="Maximum number of conversations held in memory. The least "
+        "recently used are evicted first.",
+    )
+    memory_ttl_minutes: float = Field(
+        default=180.0,
+        gt=0,
+        description="Minutes of inactivity after which a conversation is "
+        "forgotten.",
+    )
+    memory_keep_first: bool = Field(
+        default=False,
+        description="Also send the first user message when older messages are "
+        "trimmed, so the opening question survives.",
+    )
+
     # --- HTTP ---------------------------------------------------------------
     request_timeout: float = Field(
         default=120.0,

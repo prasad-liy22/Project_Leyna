@@ -163,10 +163,21 @@ class OllamaClient:
         )
         return result
 
-    async def chat_stream(self, request: ChatRequest) -> AsyncIterator[str]:
+    async def chat_stream(
+        self,
+        request: ChatRequest,
+        *,
+        done_extra: dict | None = None,
+        collected: list[str] | None = None,
+    ) -> AsyncIterator[str]:
         """Stream the assistant reply as Server-Sent Events.
 
         Yields ``data:`` frames of :class:`~app.schemas.StreamEvent` JSON.
+
+        ``done_extra`` is merged into the terminal ``{"done": true, ...}`` frame
+        (the caller uses it to add memory metadata). ``collected``, when given,
+        receives each text delta so the caller can assemble the full reply —
+        useful for persisting a completed exchange without re-parsing frames.
         """
         self.ensure_configured()
         payload = self._build_payload(request, stream=True)
@@ -196,20 +207,23 @@ class OllamaClient:
 
                     delta = (chunk.get("message") or {}).get("content")
                     if delta:
+                        if collected is not None:
+                            collected.append(delta)
                         yield sse_frame({"delta": delta, "done": False})
 
                     if chunk.get("done"):
                         ok = True
                         prompt_tokens = chunk.get("prompt_eval_count")
                         completion_tokens = chunk.get("eval_count")
-                        yield sse_frame(
-                            {
-                                "done": True,
-                                "model": chunk.get("model", model),
-                                "prompt_tokens": prompt_tokens,
-                                "completion_tokens": completion_tokens,
-                            }
-                        )
+                        final = {
+                            "done": True,
+                            "model": chunk.get("model", model),
+                            "prompt_tokens": prompt_tokens,
+                            "completion_tokens": completion_tokens,
+                        }
+                        if done_extra:
+                            final.update(done_extra)
+                        yield sse_frame(final)
                         return
         except httpx.RequestError as exc:
             error = f"Could not reach Ollama at {self._settings.chat_url}: {exc}"

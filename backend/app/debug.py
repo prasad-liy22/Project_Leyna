@@ -22,7 +22,9 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from .config import Settings, get_settings
+from .conversations import conversations
 from .runtime import mask_key, parse_level, persist_api_key, runtime
+from .schemas import ConversationSummary, MemoryReport, MemorySettings, OkResponse
 
 router = APIRouter(prefix="/debug", tags=["debug"])
 
@@ -98,10 +100,6 @@ class ApiKeyUpdate(BaseModel):
         default=False,
         description="Also write the key to the .env file so it survives a restart.",
     )
-
-
-class OkResponse(BaseModel):
-    ok: bool = True
 
 
 # --------------------------------------------------------------------------- #
@@ -197,4 +195,23 @@ async def get_usage(
 @router.delete("/usage", response_model=OkResponse)
 async def clear_usage() -> OkResponse:
     runtime.usage.clear()
+    return OkResponse()
+
+
+@router.get("/memory", response_model=MemoryReport)
+async def get_memory() -> MemoryReport:
+    """Short-term memory configuration and the conversations it holds."""
+    stats = conversations.stats()
+    return MemoryReport(
+        settings=MemorySettings(**stats["settings"]),
+        conversations=stats["conversations"],
+        messages=stats["messages"],
+        items=[ConversationSummary(**item) for item in stats["items"]],
+    )
+
+
+@router.delete("/memory", response_model=OkResponse)
+async def clear_memory() -> OkResponse:
+    """Forget every stored conversation."""
+    conversations.clear()
     return OkResponse()

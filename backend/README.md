@@ -14,6 +14,8 @@ This service lives in `backend/`. All commands below are run from that folder.
 - `POST /chat` — send a conversation, get the full reply back.
 - `POST /chat/stream` — receive the reply token-by-token as Server-Sent Events.
 - `GET /health` — liveness probe plus configuration status.
+- **Short-term memory** — optional server-side transcripts, one per
+  `conversation_id`, windowed to a token budget (see below).
 - Serves a bundled Tailwind CSS web UI at `/` (see [`../web/`](../web/README.md)).
 - Configurable model, endpoint, system prompt, and timeout via environment.
 - Async HTTP with connection pooling (`httpx`).
@@ -23,14 +25,18 @@ This service lives in `backend/`. All commands below are run from that folder.
 
 ```
 app/
-  config.py     # environment-driven settings
-  schemas.py    # request/response models
-  ollama.py     # async client for the Ollama chat API
-  main.py       # FastAPI app and routes
+  config.py        # environment-driven settings
+  schemas.py       # request/response models
+  ollama.py        # async client for the Ollama chat API
+  conversations.py # in-memory short-term memory (transcripts + windowing)
+  main.py          # FastAPI app and routes
+  runtime.py       # process-wide debug state (logs, usage, API key)
+  debug.py         # /debug routes
 tests/
-  test_chat.py        # API tests with the upstream API mocked
-  test_debug.py       # debug API tests
-  test_web.py         # static web UI serving tests
+  test_chat.py          # API tests with the upstream API mocked
+  test_debug.py         # debug API tests
+  test_conversations.py # short-term memory tests
+  test_web.py           # static web UI serving tests
 requirements.txt      # runtime dependencies
 requirements-dev.txt  # test dependencies
 .env.example          # template for your local .env
@@ -98,15 +104,39 @@ curl -s http://127.0.0.1:8000/chat \
 
 Request fields:
 
-| Field         | Type     | Required | Notes                                     |
-| ------------- | -------- | -------- | ----------------------------------------- |
-| `messages`    | list     | yes      | At least one `{role, content}` message.   |
-| `model`       | string   | no       | Overrides `OLLAMA_MODEL` for this call.   |
-| `temperature` | float    | no       | `0.0`–`2.0`.                              |
-| `system`      | string   | no       | Overrides the default system prompt.      |
+| Field             | Type     | Required | Notes                                     |
+| ----------------- | -------- | -------- | ----------------------------------------- |
+| `messages`        | list     | yes      | At least one `{role, content}` message.   |
+| `conversation_id` | string   | no       | Continue a server-side conversation (see below). |
+| `model`           | string   | no       | Overrides `OLLAMA_MODEL` for this call.   |
+| `temperature`     | float    | no       | `0.0`–`2.0`.                              |
+| `system`          | string   | no       | Overrides the default system prompt.      |
 
-`role` is one of `system`, `user`, or `assistant`. The API is stateless: send
-the whole conversation each time to keep context.
+`role` is one of `system`, `user`, or `assistant`. Without a
+`conversation_id` the API is stateless: send the whole conversation each time to
+keep context.
+
+Responses gain two fields when memory is in play — the id to send next time, and
+a summary of the transcript the model actually saw:
+
+```json
+{
+  "model": "gemma4:31b-cloud",
+  "message": {"role": "assistant", "content": "Your name is Ada."},
+  "done": true,
+  "prompt_tokens": 44,
+  "completion_tokens": 8,
+  "conversation_id": "0e0bb2a815b64fd8bf27181013d0f852",
+  "memory": {
+    "enabled": true,
+    "stored_messages": 3,
+    "window_messages": 3,
+    "estimated_tokens": 44,
+    "trimmed": false,
+    "keep_first": false
+  }
+}
+```
 
 ### `POST /chat/stream`
 
@@ -128,14 +158,67 @@ data: {"delta": ", three.", "done": false}
 data: {"done": true, "model": "gemma4:31b-cloud", "prompt_tokens": 12, "completion_tokens": 6}
 ```
 
-If the upstream call fails after streaming has started, the stream ends with
-`data: {"done": true, "error": "..."}`.
+The final frame also carries `conversation_id` and `memory` when the request used
+server-side memory. If the upstream call fails after streaming has started, the
+stream ends with `data: {"done": true, "error": "..."}` — and nothing is
+remembered.
 
 ### `GET /health`
 
 ```json
-{"status": "ok", "version": "0.1.0", "model": "gemma4:31b-cloud", "configured": true}
+{"status": "ok", "version": "0.1.0", "model": "gemma4:31b-cloud", "configured": true, "memory_enabled": true}
 ```
+
+## Short-term memory
+
+It is on by default, but a request only uses it when it sends a
+`conversation_id`. The server then owns the transcript and keeps it in process
+memory:
+
+- **Windowed transcript.** The newest messages that fit `MEMORY_TOKEN_BUDGET`
+  are sent; older ones are dropped. Token counts are estimated from text length,
+  so the budget is a guide rather than a hard limit.
+- **Turn integrity.** A window never opens on an `assistant` message, so a reply
+  is never shown without the question it answered. The current turn is always
+  included, even if it alone exceeds the budget.
+- **Two limits.** `MEMORY_MAX_MESSAGES` bounds what is stored;
+  `MEMORY_TOKEN_BUDGET` bounds what is sent. With `MEMORY_KEEP_FIRST=true` the
+  opening user message is pinned to the front when trimming.
+- **Bounded and self-cleaning.** The store behaves as an LRU cache with a TTL:
+  conversations idle longer than `MEMORY_TTL_MINUTES` are dropped, and the oldest
+  are evicted past `MEMORY_MAX_CONVERSATIONS`.
+- **Unknown ids are seeded.** If a request names a conversation the server does
+  not have (first call, restart, or TTL expiry) it adopts the `messages` you sent
+  as the history. If the server *does* know the conversation, it ignores the
+  extra history and logs a debug warning; only the trailing user message is read.
+
+Manage conversations directly:
+
+| Method   | Path                   | Purpose                                    |
+| -------- | ---------------------- | ------------------------------------------ |
+| `POST`   | `/conversations`       | Start a new conversation, return its id.   |
+| `GET`    | `/conversations/{id}`  | Read the stored transcript.                |
+| `DELETE` | `/conversations/{id}`  | Forget it.                                 |
+
+```bash
+cid=$(curl -s -X POST http://127.0.0.1:8000/conversations | python3 -c 'import sys,json;print(json.load(sys.stdin)["conversation_id"])')
+
+curl -s http://127.0.0.1:8000/chat -H 'Content-Type: application/json' \
+  -d "{\"conversation_id\": \"$cid\", \"messages\": [{\"role\": \"user\", \"content\": \"My name is Ada.\"}]}"
+
+curl -s http://127.0.0.1:8000/chat -H 'Content-Type: application/json' \
+  -d "{\"conversation_id\": \"$cid\", \"messages\": [{\"role\": \"user\", \"content\": \"What is my name?\"}]}"
+# → "Your name is Ada."
+```
+
+When `MEMORY_ENABLED=false` these routes report `409`/`404` and every request is
+stateless again.
+
+> **Single worker.** The store lives in one process, so run a single `uvicorn`
+> worker (with or without `--reload`). With several workers the same
+> `conversation_id` resolves to a different history in each one. It is also not
+> durable — a restart forgets everything. Swap in Redis or a database behind the
+> same handful of methods for anything more serious.
 
 ## Debug API
 
@@ -152,6 +235,8 @@ requires a matching `X-Admin-Token` header.
 | `DELETE` | `/debug/logs`       | Clear the log buffer.                          |
 | `GET`    | `/debug/usage`      | Token totals + recent requests.                |
 | `DELETE` | `/debug/usage`      | Clear usage history.                           |
+| `GET`    | `/debug/memory`     | Memory settings + stored conversations.      |
+| `DELETE` | `/debug/memory`     | Forget every stored conversation.            |
 
 Change the key at runtime (optionally persisting it to `.env`):
 
@@ -203,6 +288,12 @@ All settings are read from the environment (or `.env`). See `.env.example`.
 | `OLLAMA_MODEL`    | `gemma4:31b-cloud`            | Model name sent to the API.              |
 | `SYSTEM_PROMPT`   | `You are Leyna, ...`          | Default persona for every conversation.  |
 | `REQUEST_TIMEOUT` | `120`                         | Upstream timeout in seconds.             |
+| `MEMORY_ENABLED`  | `true`                        | Keep server-side transcripts.            |
+| `MEMORY_TOKEN_BUDGET` | `3000`                    | Approximate tokens of history sent to the model. |
+| `MEMORY_MAX_MESSAGES` | `60`                     | Most messages kept per conversation.     |
+| `MEMORY_MAX_CONVERSATIONS` | `100`               | Most conversations kept (LRU).           |
+| `MEMORY_TTL_MINUTES` | `180`                      | Forget a conversation after this long idle. |
+| `MEMORY_KEEP_FIRST` | `false`                     | Pin the opening user message when trimming. |
 | `CORS_ORIGINS`    | `*`                           | Comma-separated allowed browser origins. |
 | `DEBUG_ENABLED`   | `true`                        | Expose the `/debug` routes.              |
 | `ADMIN_TOKEN`     | *(empty)*                     | If set, `/debug` needs `X-Admin-Token`.  |
@@ -216,6 +307,8 @@ All settings are read from the environment (or `.env`). See `.env.example`.
   the Ollama app/CLI uses `gemma4:cloud`. Change `OLLAMA_MODEL` to switch.
 - **Local Ollama.** Set `OLLAMA_BASE_URL=http://localhost:11434` and any
   non-empty `OLLAMA_API_KEY` (a local server ignores it) to run fully offline.
+- **One worker.** Short-term memory lives in this process; run a single
+  `uvicorn` worker. See [Short-term memory](#short-term-memory).
 - **Secrets.** Keep `.env` out of version control — it is already listed in
   `.gitignore`. Never commit your API key.
 
