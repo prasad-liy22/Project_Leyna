@@ -119,7 +119,7 @@ data: {"delta": ", two", "done": false}
 
 data: {"delta": ", three.", "done": false}
 
-data: {"done": true, "model": "gemma4:31b-cloud", "completion_tokens": 6}
+data: {"done": true, "model": "gemma4:31b-cloud", "prompt_tokens": 12, "completion_tokens": 6}
 ```
 
 If the upstream call fails after streaming has started, the stream ends with
@@ -130,6 +130,61 @@ If the upstream call fails after streaming has started, the stream ends with
 ```json
 {"status": "ok", "version": "0.1.0", "model": "gemma4:31b-cloud", "configured": true}
 ```
+
+## Debug API
+
+Optional instrumentation for the frontend debug panel. Controlled by
+`DEBUG_ENABLED` (on by default); when `ADMIN_TOKEN` is set every route below
+requires a matching `X-Admin-Token` header.
+
+| Method   | Path                | Purpose                                        |
+| -------- | ------------------- | ---------------------------------------------- |
+| `GET`    | `/debug/state`      | Config snapshot, with the API key **masked**.  |
+| `POST`   | `/debug/api-key`    | Swap the API key at runtime.                   |
+| `DELETE` | `/debug/api-key`    | Drop the override, revert to `.env`/env.       |
+| `GET`    | `/debug/logs`       | Recent server log records (pollable).          |
+| `DELETE` | `/debug/logs`       | Clear the log buffer.                          |
+| `GET`    | `/debug/usage`      | Token totals + recent requests.                |
+| `DELETE` | `/debug/usage`      | Clear usage history.                           |
+
+Change the key at runtime (optionally persisting it to `.env`):
+
+```bash
+curl -s http://127.0.0.1:8000/debug/api-key \
+  -H "Content-Type: application/json" \
+  -d '{"api_key": "sk-...", "persist": true}'
+```
+
+```json
+{"api_key": {"configured": true, "masked": "sk-…9f2a", "source": "debug-override"}}
+```
+
+`GET /debug/usage` reports per-request and cumulative token consumption:
+
+```json
+{
+  "totals": {"requests": 2, "ok": 1, "errors": 1,
+             "prompt_tokens": 38, "completion_tokens": 4, "total_tokens": 42},
+  "records": [
+    {"id": 2, "endpoint": "chat", "model": "gemma4:31b-cloud", "ok": true,
+     "latency_ms": 1661.8, "prompt_tokens": 38, "completion_tokens": 4, "total_tokens": 42},
+    {"id": 1, "endpoint": "chat", "model": "gemma4:31b-cloud", "ok": false,
+     "latency_ms": 572.7, "error": "Unauthorized"}
+  ]
+}
+```
+
+`GET /debug/logs` captures application + uvicorn logs. Poll incrementally with
+`after` (pass the previous `last_id`) to fetch only new lines:
+
+```bash
+curl -s "http://127.0.0.1:8000/debug/logs?limit=100&after=0&level=INFO"
+```
+
+> **Security.** The key changer lets any caller who can reach this endpoint
+> replace the server's API key, and the log console can expose request data.
+> Keep `DEBUG_ENABLED=false` (or set a strong `ADMIN_TOKEN`) on anything that
+> isn't local development.
 
 ## Configuration
 
@@ -143,6 +198,8 @@ All settings are read from the environment (or `.env`). See `.env.example`.
 | `SYSTEM_PROMPT`   | `You are Leyna, ...`          | Default persona for every conversation.  |
 | `REQUEST_TIMEOUT` | `120`                         | Upstream timeout in seconds.             |
 | `CORS_ORIGINS`    | `*`                           | Comma-separated allowed browser origins. |
+| `DEBUG_ENABLED`   | `true`                        | Expose the `/debug` routes.              |
+| `ADMIN_TOKEN`     | *(empty)*                     | If set, `/debug` needs `X-Admin-Token`.  |
 
 ### Notes
 

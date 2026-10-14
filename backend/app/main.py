@@ -11,13 +11,16 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from . import __version__
 from .config import Settings, get_settings
+from .debug import require_admin
+from .debug import router as debug_router
 from .ollama import OllamaClient, OllamaError, sse_frame
+from .runtime import runtime
 from .schemas import ChatRequest, ChatResponse
 
 logger = logging.getLogger("leyna")
@@ -28,6 +31,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = get_settings()
     app.state.settings = settings
     app.state.ollama = OllamaClient(settings)
+    runtime.attach_log_handler()
 
     if settings.is_configured:
         logger.info("Leyna ready — model=%s endpoint=%s", settings.ollama_model, settings.chat_url)
@@ -36,6 +40,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     yield
 
+    runtime.detach_log_handler()
     await app.state.ollama.aclose()
 
 
@@ -54,6 +59,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Debug routes are opt-in via DEBUG_ENABLED, and can be locked down with ADMIN_TOKEN.
+if get_settings().debug_enabled:
+    app.include_router(debug_router, dependencies=[Depends(require_admin)])
 
 
 def _to_http_error(exc: OllamaError) -> HTTPException:
@@ -74,7 +83,7 @@ async def health(request: Request) -> dict:
         "status": "ok",
         "version": __version__,
         "model": settings.ollama_model,
-        "configured": settings.is_configured,
+        "configured": runtime.is_configured(settings),
     }
 
 

@@ -58,6 +58,7 @@ The widget tests use a fake backend, so they run without the server.
 | --------------------- | -------------------------------- |
 | App bar status dot     | `GET /health`                    |
 | Sending a message      | `POST /chat`                     |
+| Debug panel (below)    | `/debug/*`                       |
 
 The whole conversation is sent on every request (the API is stateless), so the
 assistant keeps context. The request body is:
@@ -68,6 +69,25 @@ assistant keeps context. The request body is:
 
 The reply is read from `message.content`.
 
+## Debug panel
+
+The **Debug** button in the app bar drops down a panel with three tabs:
+
+- **Usage** — token consumption per request and in total. Each row shows
+  `req <prompt> / res <completion>` tokens, the total, latency, model, and any
+  error. Start here to see what a request and its response actually cost.
+- **Logs** — a live console of the backend's application + uvicorn logs,
+  polled every 2 seconds with a level filter and a clear button.
+- **API Key** — view the current (masked) key and its source, then paste a new
+  one and **Apply**. Optionally "Save to backend `.env`" to persist it across
+  restarts; **Revert** drops the override and falls back to the environment key.
+
+The key changer calls `POST /debug/api-key`; the change takes effect on the
+backend for every client. The raw key is never sent back to the app — the panel
+only ever shows a masked value.
+
+These endpoints require `DEBUG_ENABLED=true` on the backend (the default).
+
 ## Project layout
 
 ```
@@ -76,11 +96,15 @@ lib/
   src/
     config.dart                   # API_BASE_URL (dart-define)
     models/chat_message.dart      # ChatMessage + role
+    models/debug.dart             # debug API models
+    api/exceptions.dart           # ChatApiException
     api/chat_backend.dart         # ChatBackend interface + ChatApi client
+    api/debug_api.dart            # DebugBackend interface + DebugApi client
     screens/chat_screen.dart      # chat UI
+    screens/debug_panel.dart      # dropdown debug area
     widgets/message_bubble.dart   # a single bubble
 test/
-  widget_test.dart                # UI tests with a fake backend
+  widget_test.dart                # UI tests with fake backends
 web/                              # web app shell (index.html, manifest)
 ```
 

@@ -5,6 +5,9 @@ import 'package:http/http.dart' as http;
 
 import '../config.dart';
 import '../models/chat_message.dart';
+import 'exceptions.dart';
+
+export 'exceptions.dart';
 
 /// Result of the `GET /health` probe.
 class HealthStatus {
@@ -22,17 +25,6 @@ class HealthStatus {
 
   /// The model the backend is configured to use, if reported.
   final String? model;
-}
-
-/// Error surfaced from the assistant API.
-class ChatApiException implements Exception {
-  ChatApiException(this.message, {this.statusCode});
-
-  final String message;
-  final int? statusCode;
-
-  @override
-  String toString() => message;
 }
 
 /// The contract the UI depends on, so it can be faked in tests.

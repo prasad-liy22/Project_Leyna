@@ -9,11 +9,13 @@ See https://docs.ollama.com/cloud for the API reference.
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import AsyncIterator
 
 import httpx
 
 from .config import Settings
+from .runtime import runtime
 from .schemas import ChatMessage, ChatRequest, ChatResponse
 
 
@@ -61,10 +63,33 @@ class OllamaClient:
 
     # -- helpers -------------------------------------------------------------
     def _headers(self) -> dict[str, str]:
+        key = runtime.effective_api_key(self._settings)
         return {
-            "Authorization": f"Bearer {self._settings.ollama_api_key}",
+            "Authorization": f"Bearer {key}",
             "Content-Type": "application/json",
         }
+
+    def _record(
+        self,
+        endpoint: str,
+        model: str,
+        started: float,
+        *,
+        ok: bool,
+        prompt_tokens: int | None = None,
+        completion_tokens: int | None = None,
+        error: str | None = None,
+    ) -> None:
+        """Store a usage entry for the debug panel."""
+        runtime.usage.record(
+            endpoint=endpoint,
+            model=model,
+            ok=ok,
+            latency_ms=round((time.perf_counter() - started) * 1000, 1),
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            error=error,
+        )
 
     def _build_payload(self, request: ChatRequest, *, stream: bool) -> dict:
         system_prompt = request.system if request.system is not None else self._settings.system_prompt
@@ -84,7 +109,7 @@ class OllamaClient:
 
     def ensure_configured(self) -> None:
         """Raise a clear error when no API key is available."""
-        if not self._settings.is_configured:
+        if not runtime.is_configured(self._settings):
             raise OllamaError(
                 500,
                 "OLLAMA_API_KEY is not set. Copy .env.example to .env and add your "
@@ -96,21 +121,30 @@ class OllamaClient:
         """Send a conversation and return the full assistant reply."""
         self.ensure_configured()
         payload = self._build_payload(request, stream=False)
+        model = payload["model"]
+        started = time.perf_counter()
 
         try:
             response = await self._client.post(
                 self._settings.chat_url, headers=self._headers(), json=payload
             )
+            if response.status_code != httpx.codes.OK:
+                raise OllamaError(response.status_code, _error_message(response))
+            try:
+                data = response.json()
+            except ValueError as exc:
+                raise OllamaError(502, "Ollama returned a non-JSON response.") from exc
         except httpx.RequestError as exc:
-            raise OllamaError(502, f"Could not reach Ollama at {self._settings.chat_url}: {exc}") from exc
+            error = f"Could not reach Ollama at {self._settings.chat_url}: {exc}"
+            self._record("chat", model, started, ok=False, error=error)
+            raise OllamaError(502, error) from exc
+        except OllamaError as exc:
+            self._record("chat", model, started, ok=False, error=exc.detail)
+            raise
 
-        if response.status_code != httpx.codes.OK:
-            raise OllamaError(response.status_code, _error_message(response))
-
-        data = response.json()
         message = data.get("message") or {}
-        return ChatResponse(
-            model=data.get("model", payload["model"]),
+        result = ChatResponse(
+            model=data.get("model", model),
             message=ChatMessage(
                 role=message.get("role", "assistant"),
                 content=message.get("content", ""),
@@ -119,6 +153,15 @@ class OllamaClient:
             prompt_tokens=data.get("prompt_eval_count"),
             completion_tokens=data.get("eval_count"),
         )
+        self._record(
+            "chat",
+            result.model,
+            started,
+            ok=True,
+            prompt_tokens=result.prompt_tokens,
+            completion_tokens=result.completion_tokens,
+        )
+        return result
 
     async def chat_stream(self, request: ChatRequest) -> AsyncIterator[str]:
         """Stream the assistant reply as Server-Sent Events.
@@ -127,6 +170,12 @@ class OllamaClient:
         """
         self.ensure_configured()
         payload = self._build_payload(request, stream=True)
+        model = payload["model"]
+        started = time.perf_counter()
+        ok = False
+        error: str | None = None
+        prompt_tokens: int | None = None
+        completion_tokens: int | None = None
 
         try:
             async with self._client.stream(
@@ -150,13 +199,33 @@ class OllamaClient:
                         yield sse_frame({"delta": delta, "done": False})
 
                     if chunk.get("done"):
+                        ok = True
+                        prompt_tokens = chunk.get("prompt_eval_count")
+                        completion_tokens = chunk.get("eval_count")
                         yield sse_frame(
                             {
                                 "done": True,
-                                "model": chunk.get("model", payload["model"]),
-                                "completion_tokens": chunk.get("eval_count"),
+                                "model": chunk.get("model", model),
+                                "prompt_tokens": prompt_tokens,
+                                "completion_tokens": completion_tokens,
                             }
                         )
                         return
         except httpx.RequestError as exc:
-            raise OllamaError(502, f"Could not reach Ollama at {self._settings.chat_url}: {exc}") from exc
+            error = f"Could not reach Ollama at {self._settings.chat_url}: {exc}"
+            raise OllamaError(502, error) from exc
+        except OllamaError as exc:
+            error = exc.detail
+            raise
+        finally:
+            if not ok and error is None:
+                error = "stream ended before completion"
+            self._record(
+                "chat/stream",
+                model,
+                started,
+                ok=ok,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                error=error,
+            )

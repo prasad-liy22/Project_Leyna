@@ -1,15 +1,20 @@
 import 'package:flutter/material.dart';
 
 import '../api/chat_backend.dart';
+import '../api/debug_api.dart';
 import '../models/chat_message.dart';
 import '../widgets/message_bubble.dart';
+import 'debug_panel.dart';
 
 /// The main chat screen: a scrolling transcript plus a composer.
 class ChatScreen extends StatefulWidget {
-  const ChatScreen({super.key, this.backend});
+  const ChatScreen({super.key, this.backend, this.debugBackend});
 
   /// Injectable for tests; defaults to a real [ChatApi].
   final ChatBackend? backend;
+
+  /// Injectable for tests; defaults to a real [DebugApi].
+  final DebugBackend? debugBackend;
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -17,11 +22,13 @@ class ChatScreen extends StatefulWidget {
 
 class _ChatScreenState extends State<ChatScreen> {
   late final ChatBackend _backend = widget.backend ?? ChatApi();
+  late final DebugBackend _debugBackend = widget.debugBackend ?? DebugApi();
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
 
   bool _sending = false;
+  bool _showDebug = false;
   HealthStatus? _health;
 
   @override
@@ -87,15 +94,40 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
+  void _toggleDebug() {
+    setState(() => _showDebug = _showDebug != true);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Leyna'),
-        actions: [_StatusIndicator(health: _health)],
+        actions: [
+          _StatusIndicator(health: _health),
+          const SizedBox(width: 4),
+          TextButton.icon(
+            onPressed: _toggleDebug,
+            icon: const Icon(Icons.bug_report, size: 18),
+            label: const Text('Debug'),
+          ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: Column(
         children: [
+          AnimatedSize(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            alignment: Alignment.topCenter,
+            child: _showDebug == true
+                ? DebugPanel(
+                    backend: _debugBackend,
+                    onClose: () => setState(() => _showDebug = false),
+                    onApiKeyChanged: _checkHealth,
+                  )
+                : const SizedBox(width: double.infinity),
+          ),
           Expanded(child: _buildTranscript()),
           if (_sending) const LinearProgressIndicator(minHeight: 2),
           _buildComposer(context),
@@ -136,7 +168,8 @@ class _ChatScreenState extends State<ChatScreen> {
                   hintText: 'Ask Leyna anything…',
                   border: OutlineInputBorder(),
                   isDense: true,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  contentPadding:
+                      EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                 ),
               ),
             ),

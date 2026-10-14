@@ -55,6 +55,18 @@ class Settings(BaseSettings):
         "Set to your frontend URL(s) in production.",
     )
 
+    # --- Debug --------------------------------------------------------------
+    debug_enabled: bool = Field(
+        default=True,
+        description="Expose the /debug routes (logs, usage, API key). "
+        "Set to false in production.",
+    )
+    admin_token: str = Field(
+        default="",
+        description="When set, /debug routes require a matching X-Admin-Token "
+        "header. Leave empty for open access during local development.",
+    )
+
     @property
     def cors_origins_list(self) -> list[str]:
         """Allowed origins as a list, for the CORS middleware."""
