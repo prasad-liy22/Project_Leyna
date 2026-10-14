@@ -64,6 +64,12 @@ this FastAPI code. The realistic causes, in order of likelihood:
 
 Symptoms 2–4 are fixed entirely in the dashboard (section 2), not in code.
 
+> **Resolved.** This project's production domain is
+> `https://project-leyna.vercel.app`, and it already serves this FastAPI app
+> correctly — `GET /health` returns HTTP 200 JSON. The Express response
+> described above belongs to a *different* project (`personal-ai-backend`), not
+> this repository.
+
 ---
 
 ## 2. Required Vercel dashboard settings
@@ -172,10 +178,10 @@ Local development is unchanged: `uvicorn app.main:app --reload`.
 
 ## 6. Test the deployed API
 
-Replace `HOST` with the deployment URL.
+`HOST` is the project's production domain:
 
 ```bash
-HOST=https://personal-ai-backend.vercel.app
+HOST=https://project-leyna.vercel.app
 
 # Liveness + configuration (expect HTTP 200 and JSON)
 curl -i "$HOST/health"

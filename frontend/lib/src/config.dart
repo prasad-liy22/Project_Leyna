@@ -13,7 +13,6 @@ class AppConfig {
 
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue:
-        'https://project-leyna-f0k57lwi8-malaka-prasad-s-projects.vercel.app',
+    defaultValue: 'https://project-leyna.vercel.app',
   );
 }

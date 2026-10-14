@@ -83,7 +83,7 @@ shipped build points at the **deployed Vercel backend** instead, set in
 ```html
 <meta
   name="leyna-api-base"
-  content="https://project-leyna-f0k57lwi8-malaka-prasad-s-projects.vercel.app"
+  content="https://project-leyna.vercel.app"
 />
 ```
 
