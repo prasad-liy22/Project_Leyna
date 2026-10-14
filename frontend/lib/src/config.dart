@@ -1,6 +1,7 @@
 /// Build-time configuration.
 ///
-/// Override the backend URL when running, for example:
+/// Defaults to the deployed backend on Vercel. Override it when running
+/// locally, for example:
 ///
 ///   flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8000
 ///
@@ -12,6 +13,7 @@ class AppConfig {
 
   static const String apiBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
-    defaultValue: 'http://localhost:8000',
+    defaultValue:
+        'https://project-leyna-f0k57lwi8-malaka-prasad-s-projects.vercel.app',
   );
 }

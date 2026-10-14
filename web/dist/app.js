@@ -14,7 +14,14 @@
 // text-rose-600 dark:text-rose-300 text-emerald-600 dark:text-emerald-300
 // text-violet-500 dark:text-violet-300
 
-const API_BASE = (document.querySelector('meta[name="leyna-api-base"]')?.content ?? "")
+// The API base comes from the meta tag in index.html. A host page can override
+// it before this module runs (handy for embeds and for tests that target a
+// local backend): `window.__LEXYNA_API_BASE__ = "http://localhost:8000"`.
+const API_BASE = (
+  window.__LEXYNA_API_BASE__ ??
+  document.querySelector('meta[name="leyna-api-base"]')?.content ??
+  ""
+)
   .trim()
   .replace(/\/+$/, "");
 const HISTORY_KEY = "leyna.history.v1";

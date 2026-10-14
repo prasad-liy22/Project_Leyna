@@ -21,22 +21,26 @@ flutter pub get
 
 ## Run
 
-Start the backend first:
+The app points at the **deployed Vercel backend** by default, so you can just
+run it:
+
+```bash
+flutter run -d chrome
+```
+
+To use a backend running on your machine instead, start it first:
 
 ```bash
 cd backend
 uvicorn app.main:app --reload
 ```
 
-Then run the app. It points at `http://localhost:8000` by default:
+and pass a dart-define:
 
 ```bash
-flutter run -d chrome
-```
+# local backend
+flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:8000
 
-Point it somewhere else with a dart-define:
-
-```bash
 # another host/port
 flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:9000
 

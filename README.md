@@ -21,6 +21,12 @@ Leyna's tone comes from a single persona prompt in
 **Sinhala-first** (she understands Singlish and replies in Sinhala Unicode by
 default). Edit that file to reshape her, or override it per request.
 
+Both clients find the backend through a base URL — the web UI's
+`leyna-api-base` meta tag (`web/src/index.html`) and Flutter's `API_BASE_URL`
+(`frontend/lib/src/config.dart`). The committed build of each points at the
+**deployed backend on Vercel**; see the folder READMEs to point either at a
+local backend instead.
+
 ## Quick start
 
 ```bash
@@ -32,7 +38,8 @@ cp .env.example .env          # then set OLLAMA_API_KEY
 uvicorn app.main:app --reload # http://localhost:8000
 
 # 2. Web UI — nothing to install, it is already built and served at /
-#    open http://localhost:8000/
+#    open http://localhost:8000/ (it talks to the deployed backend by
+#    default; see web/README.md to point it at this local one)
 ```
 
 ### Rebuilding the web UI

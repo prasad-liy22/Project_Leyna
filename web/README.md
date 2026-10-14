@@ -76,15 +76,29 @@ cd ../backend && uvicorn app.main:app --reload
 
 ## Configuration
 
-The UI calls the API on the same origin by default. To point it at a backend
-elsewhere, edit the meta tag in `src/index.html` and rebuild:
+The UI talks to the backend that serves it by default (same origin). The
+shipped build points at the **deployed Vercel backend** instead, set in
+`src/index.html`:
 
 ```html
-<meta name="leyna-api-base" content="http://localhost:8000" />
+<meta
+  name="leyna-api-base"
+  content="https://project-leyna-f0k57lwi8-malaka-prasad-s-projects.vercel.app"
+/>
+```
+
+Change the value and rebuild to point elsewhere, or (without rebuilding) set it
+at runtime before `app.js` loads:
+
+```html
+<script>window.__LEXYNA_API_BASE__ = "http://localhost:8000";</script>
 ```
 
 Because the backend enables CORS, cross-origin use works as long as the origin
 is allowed (`CORS_ORIGINS`).
+
+> Local development and `npm run smoke` override the base back to same-origin,
+> so you keep testing against the backend you started locally.
 
 ## Theming
 

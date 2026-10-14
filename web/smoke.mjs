@@ -413,6 +413,12 @@ async function main() {
     await cmd("Runtime.enable");
     await cmd("Page.enable");
 
+    // The shipped UI points at the deployed backend; aim this run at the local
+    // one before any page script executes.
+    await cmd("Page.addScriptToEvaluateOnNewDocument", {
+      source: "window.__LEXYNA_API_BASE__ = '';",
+    });
+
     const waitForReady = async () => {
       let ready = false;
       for (let i = 0; i < 60 && !ready; i += 1) {
