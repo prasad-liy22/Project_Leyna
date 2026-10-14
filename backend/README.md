@@ -26,6 +26,7 @@ This service lives in `backend/`. All commands below are run from that folder.
 ```
 app/
   config.py        # environment-driven settings
+  prompts.py       # the default Leyna persona (system prompt)
   schemas.py       # request/response models
   ollama.py        # async client for the Ollama chat API
   conversations.py # in-memory short-term memory (transcripts + windowing)
@@ -34,6 +35,7 @@ app/
   debug.py         # /debug routes
 tests/
   test_chat.py          # API tests with the upstream API mocked
+  test_prompts.py       # the default persona (contents + wiring)
   test_debug.py         # debug API tests
   test_conversations.py # short-term memory tests
   test_web.py           # static web UI serving tests
@@ -286,7 +288,7 @@ All settings are read from the environment (or `.env`). See `.env.example`.
 | `OLLAMA_API_KEY`  | *(empty)*                     | Bearer token for ollama.com. **Required.** |
 | `OLLAMA_BASE_URL` | `https://ollama.com`          | Use `http://localhost:11434` for local Ollama. |
 | `OLLAMA_MODEL`    | `gemma4:31b-cloud`            | Model name sent to the API.              |
-| `SYSTEM_PROMPT`   | `You are Leyna, ...`          | Default persona for every conversation.  |
+| `SYSTEM_PROMPT`   | Built-in Leyna persona        | Default persona for every conversation; see `app/prompts.py`. |
 | `REQUEST_TIMEOUT` | `120`                         | Upstream timeout in seconds.             |
 | `MEMORY_ENABLED`  | `true`                        | Keep server-side transcripts.            |
 | `MEMORY_TOKEN_BUDGET` | `3000`                    | Approximate tokens of history sent to the model. |
@@ -301,6 +303,11 @@ All settings are read from the environment (or `.env`). See `.env.example`.
 
 ### Notes
 
+- **Persona.** The default system prompt lives in
+  [`app/prompts.py`](app/prompts.py) — one place to edit Leyna's tone. Override
+  it for a single request with the `system` field, or globally with
+  `SYSTEM_PROMPT`. It is prepended to every request, so it counts against the
+  context window.
 - **Model name.** `gemma4:31b-cloud` is verified to work against
   `https://ollama.com/api/chat`. The name returned by
   `curl https://ollama.com/api/tags` (for example `gemma4:31b`) also works, while

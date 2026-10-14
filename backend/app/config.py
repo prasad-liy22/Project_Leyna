@@ -10,6 +10,8 @@ from pathlib import Path
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from .prompts import DEFAULT_SYSTEM_PROMPT
+
 
 class Settings(BaseSettings):
     """Runtime configuration loaded from the environment."""
@@ -37,10 +39,12 @@ class Settings(BaseSettings):
     ollama_model: str = Field(default="gemma4:31b-cloud")
 
     # --- Assistant behaviour ------------------------------------------------
+    # The default lives in app/prompts.py so the persona has one home. Override
+    # it per request with the `system` field, or globally with SYSTEM_PROMPT.
     system_prompt: str = Field(
-        default="You are Leyna, a warm, concise and helpful personal assistant.",
+        default=DEFAULT_SYSTEM_PROMPT,
         description="Default system prompt used when a request does not "
-        "provide its own.",
+        "provide its own. Defaults to the built-in Leyna persona.",
     )
 
     # --- Short-term memory --------------------------------------------------

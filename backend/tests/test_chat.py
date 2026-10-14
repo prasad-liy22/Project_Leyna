@@ -14,6 +14,7 @@ from fastapi.testclient import TestClient
 from app.config import Settings, get_settings
 from app.main import app
 from app.ollama import OllamaClient
+from app.prompts import DEFAULT_SYSTEM_PROMPT
 
 
 def _non_stream_response() -> httpx.Response:
@@ -61,6 +62,27 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     get_settings.cache_clear()
 
 
+@pytest.fixture
+def recording(monkeypatch: pytest.MonkeyPatch) -> Iterator[tuple[TestClient, list[dict]]]:
+    """App wired to a mock transport that records every upstream payload."""
+    monkeypatch.setenv("OLLAMA_API_KEY", "test-key")
+    get_settings.cache_clear()
+    settings = Settings(ollama_api_key="test-key")
+    seen: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content))
+        return _non_stream_response()
+
+    with TestClient(app) as test_client:
+        app.state.ollama = OllamaClient(
+            settings, client=httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        )
+        yield test_client, seen
+
+    get_settings.cache_clear()
+
+
 def test_health(client: TestClient) -> None:
     response = client.get("/health")
     assert response.status_code == 200
@@ -103,3 +125,27 @@ def test_chat_without_api_key_returns_error(monkeypatch: pytest.MonkeyPatch) -> 
 
     assert response.status_code == 500
     assert "OLLAMA_API_KEY" in response.json()["detail"]
+
+
+def test_persona_is_sent_as_the_system_message(
+    recording: tuple[TestClient, list[dict]],
+) -> None:
+    client, seen = recording
+    client.post("/chat", json={"messages": [{"role": "user", "content": "Hi"}]})
+
+    assert seen[-1]["messages"][0] == {
+        "role": "system",
+        "content": DEFAULT_SYSTEM_PROMPT,
+    }
+
+
+def test_request_system_field_overrides_the_persona(
+    recording: tuple[TestClient, list[dict]],
+) -> None:
+    client, seen = recording
+    client.post(
+        "/chat",
+        json={"messages": [{"role": "user", "content": "Hi"}], "system": "Be terse."},
+    )
+
+    assert seen[-1]["messages"][0] == {"role": "system", "content": "Be terse."}
