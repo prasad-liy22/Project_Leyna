@@ -204,6 +204,7 @@
         <button class="tab tab-active" data-tab="usage" type="button">Usage</button>
         <button class="tab" data-tab="logs" type="button">Logs</button>
         <button class="tab" data-tab="api-key" type="button">API key</button>
+        <button class="tab" data-tab="memory" type="button">Memory</button>
       </div>
 
       <div class="flex-1 overflow-y-auto p-4">
@@ -322,6 +323,53 @@
               Stored in this browser only; sent as <code class="font-mono">X-Admin-Token</code>.
             </span>
           </label>
+        </section>
+
+        <!-- ---------------------------- Memory ------------------------------ -->
+        <section id="panel-memory" class="hidden space-y-4">
+          <div id="memory-settings" class="grid grid-cols-2 gap-2 sm:grid-cols-3"></div>
+
+          <div class="card space-y-2 p-4">
+            <div class="flex items-center gap-2">
+              <p class="flex-1 text-xs font-semibold tracking-wide text-ink-faint uppercase">
+                This chat
+              </p>
+              <button
+                id="memory-forget"
+                class="btn btn-ghost !px-2 !py-1 text-xs"
+                type="button"
+              >
+                Forget
+              </button>
+            </div>
+            <p id="memory-conversation" class="font-mono text-xs break-all text-ink">—</p>
+            <p id="memory-window" class="text-xs text-ink-faint">—</p>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <h3 class="flex-1 text-xs font-semibold tracking-wide text-ink-faint uppercase">
+              Stored conversations
+            </h3>
+            <button id="memory-clear" class="btn btn-ghost !px-2 !py-1 text-xs" type="button">
+              Forget all
+            </button>
+          </div>
+
+          <div class="card overflow-hidden">
+            <table class="w-full text-left text-xs">
+              <thead class="bg-elevated text-ink-faint">
+                <tr>
+                  <th class="px-3 py-2 font-medium">Conversation</th>
+                  <th class="px-3 py-2 text-right font-medium">Msg</th>
+                  <th class="px-3 py-2 text-right font-medium">Updated</th>
+                </tr>
+              </thead>
+              <tbody id="memory-table-body" class="divide-y divide-line"></tbody>
+            </table>
+            <p id="memory-empty" class="px-3 py-6 text-center text-xs text-ink-faint">
+              No conversations stored.
+            </p>
+          </div>
         </section>
       </div>
     </aside>

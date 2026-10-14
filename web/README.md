@@ -11,13 +11,20 @@ at `/`**, so there is nothing to install at runtime and no second dev server.
   links) — everything is HTML-escaped before any markup is added.
 - Per-message token counts, a stop button, copy-to-clipboard, and a
   conversation persisted in `localStorage`.
+- **Short-term memory.** The client keeps a server `conversation_id` (in
+  `localStorage`) and, once the server holds the transcript, sends only the new
+  user turn. *New chat* forgets the conversation on the server and starts
+  another; if the server has forgotten one (restart or TTL) the client resends
+  its local transcript so the server can re-seed itself.
 - A **light/dark theme toggle** in the header. The choice is remembered; on a
   first visit the UI follows the OS preference.
-- A **debug drawer** with three tabs, backed by the `/debug/*` API:
+- A **debug drawer** with four tabs, backed by the `/debug/*` API:
   - **Usage** — cumulative token totals + a per-request table.
   - **Logs** — live server console (polled every 2 s, incremental via `after`).
   - **API key** — swap the runtime key, optionally persist it to `.env`, revert,
     and store an `X-Admin-Token` for locked-down deployments.
+  - **Memory** — the active memory settings, this chat's window, and every
+    stored conversation, with buttons to forget one or all of them.
 
 ## Stack
 
@@ -112,6 +119,25 @@ wrong theme; `app.js` then keeps the toggle's icon, `aria-pressed` and
 To add a themed colour, add the token in both `:root` and `.dark`, map it in
 `@theme inline`, then use the resulting utility.
 
+## Short-term memory
+
+Server-side history is opt-in per request via `conversation_id` (see the
+[backend README](../backend/README.md#short-term-memory)). The client:
+
+1. Creates a conversation with `POST /conversations` before the first message
+   (skipped when `/health` reports `memory_enabled: false`).
+2. Stores the id under `leyna.conversation.v1` and, while the server knows it,
+   sends only the new user turn — the reply's `memory` field then drives the
+   "✂ trimmed" chip.
+3. On load, rehydrates from `GET /conversations/{id}`; if that 404s (backend
+   restarted, or the TTL elapsed) or comes back empty, it keeps the local
+   transcript and marks the conversation as needing a re-seed.
+4. Re-seeds by sending the whole local transcript plus the id once — the server
+   adopts it as history (see "Unknown ids are seeded" above).
+
+The **Memory** tab renders `GET /debug/memory`: the settings in force, this
+chat's stored-vs-sent window, and the conversation table.
+
 ## Smoke test
 
 `smoke.mjs` drives the real UI in headless Chrome over the DevTools Protocol
@@ -129,8 +155,14 @@ cd web && npm run smoke
 ```
 
 It checks streaming + Markdown rendering, the token chip, history persistence,
-the light/dark toggle, every debug tab, Escape-to-close, and New chat. Exits
-non-zero on failure.
+the light/dark toggle, every debug tab (including the memory report), the
+conversation-id handshake, Escape-to-close, New chat, and — after a reload with a
+conversation the server has been made to forget — that the transcript is rebuilt
+and re-seeded. Exits non-zero on failure.
+
+`/chat/stream` is stubbed, so the run is free; the two phases reload the page and
+the memory assertions are skipped when the backend reports
+`memory_enabled: false`.
 
 ## Notes
 

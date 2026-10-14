@@ -1,7 +1,8 @@
 /* Leyna web UI — a dependency-free client for the FastAPI backend.
  *
  * Handles: streaming chat over SSE, a persisted conversation, a health probe,
- * and the debug drawer (token usage, live server logs, runtime API-key swap).
+ * the debug drawer (token usage, live server logs, runtime API-key swap), and
+ * the short-term memory the backend keeps per conversation_id.
  */
 
 // Tailwind scans this file for class names. Dynamic class strings must appear
@@ -9,13 +10,15 @@
 // log-debug log-info log-warning log-error bubble-user bubble-assistant
 // bubble-error animate-bounce-dot animate-blink animate-fade-up animate-slide-in
 // bg-emerald-500 dark:bg-emerald-400 bg-amber-500 dark:bg-amber-400
-// bg-rose-500 dark:bg-rose-400 bg-ink-faint text-ink
+// bg-rose-500 dark:bg-rose-400 bg-ink-faint text-ink bg-elevated
 // text-rose-600 dark:text-rose-300 text-emerald-600 dark:text-emerald-300
+// text-violet-500 dark:text-violet-300
 
 const API_BASE = (document.querySelector('meta[name="leyna-api-base"]')?.content ?? "")
   .trim()
   .replace(/\/+$/, "");
 const HISTORY_KEY = "leyna.history.v1";
+const CONVERSATION_KEY = "leyna.conversation.v1";
 const ADMIN_KEY = "leyna.adminToken";
 const POLL_MS = 2000;
 
@@ -46,6 +49,7 @@ const dom = {
   panelUsage: $("#panel-usage"),
   panelLogs: $("#panel-logs"),
   panelKey: $("#panel-api-key"),
+  panelMemory: $("#panel-memory"),
   usageTotals: $("#usage-totals"),
   usageBody: $("#usage-table-body"),
   usageEmpty: $("#usage-empty"),
@@ -64,6 +68,13 @@ const dom = {
   keyRevert: $("#key-revert"),
   keyFeedback: $("#key-feedback"),
   adminToken: $("#admin-token"),
+  memorySettings: $("#memory-settings"),
+  memoryConversation: $("#memory-conversation"),
+  memoryWindow: $("#memory-window"),
+  memoryBody: $("#memory-table-body"),
+  memoryEmpty: $("#memory-empty"),
+  memoryClear: $("#memory-clear"),
+  memoryForget: $("#memory-forget"),
 };
 
 const state = {
@@ -74,7 +85,12 @@ const state = {
   activeTab: "usage",
   lastLogId: 0,
   timer: null,
-  health: { online: false, configured: false, model: "" },
+  conversationId: null,
+  // "unknown" until proven otherwise; "known" once the server holds it; "local"
+  // when the server has forgotten it but we still have the transcript.
+  conversationState: "unknown",
+  lastMemory: null,
+  health: { online: false, configured: false, model: "", memoryEnabled: null },
 };
 
 let nextId = 1;
@@ -172,13 +188,20 @@ function adminHeaders() {
   return token ? { "X-Admin-Token": token } : {};
 }
 
-async function debugRequest(path, options = {}) {
-  const response = await fetch(`${API_BASE}/debug${path}`, {
+async function apiRequest(path, options = {}) {
+  const response = await fetch(`${API_BASE}${path}`, {
     ...options,
-    headers: { "Content-Type": "application/json", ...adminHeaders(), ...(options.headers ?? {}) },
+    headers: { "Content-Type": "application/json", ...(options.headers ?? {}) },
   });
   if (!response.ok) throw new Error(await readError(response));
   return response.json();
+}
+
+function debugRequest(path, options = {}) {
+  return apiRequest(`/debug${path}`, {
+    ...options,
+    headers: { ...adminHeaders(), ...(options.headers ?? {}) },
+  });
 }
 
 /* -------------------------------------------------------------------------- */
@@ -189,9 +212,14 @@ async function refreshHealth() {
     const response = await fetch(`${API_BASE}/health`);
     if (!response.ok) throw new Error();
     const data = await response.json();
-    state.health = { online: true, configured: Boolean(data.configured), model: data.model };
+    state.health = {
+      online: true,
+      configured: Boolean(data.configured),
+      model: data.model,
+      memoryEnabled: Boolean(data.memory_enabled),
+    };
   } catch {
-    state.health = { online: false, configured: false, model: "" };
+    state.health = { online: false, configured: false, model: "", memoryEnabled: null };
   }
 
   const { online, configured, model } = state.health;
@@ -254,6 +282,11 @@ function paintMessage(message) {
   const chips = [];
   if (message.error)
     chips.push(`<span class="text-rose-600 dark:text-rose-400">⚠ ${escapeHtml(message.error)}</span>`);
+  if (message.trimmed) {
+    chips.push(
+      '<span class="chip !py-0.5" title="Older messages were dropped to fit the memory token budget">✂ trimmed</span>',
+    );
+  }
   if (message.tokens) {
     chips.push(
       `<span class="chip !py-0.5" title="prompt / completion tokens">↑ ${fmt(
@@ -292,6 +325,7 @@ function addMessage(partial) {
     tokens: null,
     model: null,
     error: null,
+    trimmed: false,
     pending: false,
     ...partial,
   };
@@ -321,7 +355,14 @@ function saveHistory() {
   try {
     const payload = state.messages
       .filter((message) => message.content || message.error)
-      .map(({ role, content, tokens, model, error }) => ({ role, content, tokens, model, error }));
+      .map(({ role, content, tokens, model, error, trimmed }) => ({
+        role,
+        content,
+        tokens,
+        model,
+        error,
+        trimmed,
+      }));
     localStorage.setItem(HISTORY_KEY, JSON.stringify(payload));
   } catch {
     /* storage is best-effort */
@@ -343,6 +384,7 @@ function loadHistory() {
         tokens: message.tokens ?? null,
         model: message.model ?? null,
         error: message.error ?? null,
+        trimmed: Boolean(message.trimmed),
         pending: false,
       }));
   } catch {
@@ -350,9 +392,113 @@ function loadHistory() {
   }
 }
 
+function saveConversationId() {
+  try {
+    if (state.conversationId) localStorage.setItem(CONVERSATION_KEY, state.conversationId);
+    else localStorage.removeItem(CONVERSATION_KEY);
+  } catch {
+    /* storage is best-effort */
+  }
+}
+
+/**
+ * Rebuild the transcript from the server when it still knows the conversation.
+ * Returns false (and leaves the local history in place) when it does not.
+ */
+async function restoreConversation() {
+  let stored = null;
+  try {
+    stored = localStorage.getItem(CONVERSATION_KEY);
+  } catch {
+    return false;
+  }
+  if (!stored) return false;
+
+  state.conversationId = stored;
+  try {
+    const response = await fetch(`${API_BASE}/conversations/${encodeURIComponent(stored)}`);
+    if (!response.ok) {
+      // Forgotten by the server (restart or TTL). Keep the transcript and let
+      // the next request re-seed it.
+      state.conversationState = "local";
+      return false;
+    }
+    const data = await response.json();
+    state.messages = (data.messages ?? [])
+      .filter((message) => message.role === "user" || message.role === "assistant")
+      .map((message) => ({
+        id: nextId++,
+        role: message.role,
+        content: message.content,
+        tokens: null,
+        model: null,
+        error: null,
+        trimmed: false,
+        pending: false,
+      }));
+    // An empty transcript means there is nothing to restore from the server, so
+    // mark the conversation as needing a re-seed from local history.
+    state.conversationState = state.messages.length > 0 ? "known" : "local";
+    return state.messages.length > 0;
+  } catch {
+    state.conversationState = "local";
+    return false;
+  }
+}
+
+/* -------------------------------------------------------------------------- */
+/* Memory                                                                     */
+/* -------------------------------------------------------------------------- */
+async function memoryEnabled() {
+  if (state.health.memoryEnabled === null) await refreshHealth();
+  return state.health.memoryEnabled === true;
+}
+
+/**
+ * The conversation_id to send with the next turn, creating one if needed.
+ * Returns null when the backend has short-term memory switched off.
+ */
+async function ensureConversation() {
+  if (state.conversationId && state.conversationState === "known") return state.conversationId;
+  if (!(await memoryEnabled())) {
+    state.conversationId = null;
+    state.conversationState = "unknown";
+    saveConversationId();
+    return null;
+  }
+  // The server forgot this conversation but we still have its transcript: reuse
+  // the id and send the whole history once, so the server can re-seed itself.
+  if (state.conversationState === "local" && state.conversationId) return state.conversationId;
+
+  try {
+    const data = await apiRequest("/conversations", { method: "POST" });
+    state.conversationId = data.conversation_id;
+    state.conversationState = "known";
+    saveConversationId();
+    return state.conversationId;
+  } catch {
+    return null;
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Chat                                                                       */
 /* -------------------------------------------------------------------------- */
+function applyDone(message, event) {
+  message.model = event.model ?? message.model;
+  message.tokens = {
+    prompt: event.prompt_tokens ?? null,
+    completion: event.completion_tokens ?? null,
+  };
+  message.trimmed = Boolean(event.memory?.trimmed);
+  if (event.conversation_id) {
+    state.conversationId = event.conversation_id;
+    state.conversationState = "known";
+    saveConversationId();
+  }
+  if (event.memory) state.lastMemory = event.memory;
+}
+
 async function streamReply(payload, message, signal) {
   if (!canStream) {
     const response = await fetch(`${API_BASE}/chat`, {
@@ -364,8 +510,7 @@ async function streamReply(payload, message, signal) {
     if (!response.ok) throw new Error(await readError(response));
     const data = await response.json();
     message.content = data.message?.content ?? "";
-    message.model = data.model ?? null;
-    message.tokens = { prompt: data.prompt_tokens ?? null, completion: data.completion_tokens ?? null };
+    applyDone(message, data);
     paintMessage(message);
     return;
   }
@@ -409,13 +554,7 @@ async function streamReply(payload, message, signal) {
           message.content += event.delta;
           schedulePaint(message);
         }
-        if (event.done) {
-          message.model = event.model ?? message.model;
-          message.tokens = {
-            prompt: event.prompt_tokens ?? null,
-            completion: event.completion_tokens ?? null,
-          };
-        }
+        if (event.done) applyDone(message, event);
       }
     }
   }
@@ -425,6 +564,12 @@ async function sendMessage(rawText) {
   const content = rawText.trim();
   if (!content || state.busy) return;
 
+  // Snapshot the transcript *before* this turn so it can re-seed a server that
+  // has forgotten the conversation.
+  const priorHistory = state.messages
+    .filter((message) => message.content)
+    .map(({ role, content: text }) => ({ role, content: text }));
+
   addMessage({ role: "user", content });
   dom.input.value = "";
   autoGrow();
@@ -432,14 +577,17 @@ async function sendMessage(rawText) {
   const reply = addMessage({ role: "assistant", pending: true });
   const controller = new AbortController();
   state.controller = controller;
-
-  const payload = {
-    messages: state.messages
-      .filter((message) => message.content && message.id !== reply.id)
-      .map(({ role, content: text }) => ({ role, content: text })),
-  };
-
   setBusy(true);
+
+  const conversationId = await ensureConversation();
+  // With server-side memory the server owns the transcript, so send only the new
+  // turn. Otherwise (or when re-seeding a forgotten conversation) send it all.
+  const messages =
+    conversationId && state.conversationState === "known"
+      ? [{ role: "user", content }]
+      : [...priorHistory, { role: "user", content }];
+  const payload = conversationId ? { conversation_id: conversationId, messages } : { messages };
+
   try {
     await streamReply(payload, reply, controller.signal);
   } catch (error) {
@@ -457,6 +605,7 @@ async function sendMessage(rawText) {
     setBusy(false);
     saveHistory();
     scrollToBottom();
+    if (state.debugOpen && state.activeTab === "memory") void refreshDebug();
   }
 }
 
@@ -476,10 +625,15 @@ function autoGrow() {
   dom.input.style.height = `${Math.min(dom.input.scrollHeight, 160)}px`;
 }
 
-function resetConversation() {
+async function resetConversation() {
   if (state.busy) state.controller?.abort();
+
+  const previous = state.conversationId;
   state.messages = [];
   state.lastLogId = 0;
+  state.lastMemory = null;
+  state.conversationId = null;
+  state.conversationState = "unknown";
   dom.messages.innerHTML = "";
   syncEmptyState();
   try {
@@ -487,6 +641,17 @@ function resetConversation() {
   } catch {
     /* ignore */
   }
+  saveConversationId();
+
+  if (previous) {
+    try {
+      await apiRequest(`/conversations/${encodeURIComponent(previous)}`, { method: "DELETE" });
+    } catch {
+      /* already gone — nothing to do */
+    }
+  }
+  await ensureConversation();
+  if (state.debugOpen && state.activeTab === "memory") void refreshDebug();
   dom.input.focus();
 }
 
@@ -504,6 +669,7 @@ function selectTab(tab) {
   dom.panelUsage.classList.toggle("hidden", tab !== "usage");
   dom.panelLogs.classList.toggle("hidden", tab !== "logs");
   dom.panelKey.classList.toggle("hidden", tab !== "api-key");
+  dom.panelMemory.classList.toggle("hidden", tab !== "memory");
   void refreshDebug();
 }
 
@@ -532,6 +698,7 @@ async function refreshDebug() {
   try {
     if (state.activeTab === "usage") await renderUsage();
     else if (state.activeTab === "logs") await renderLogs();
+    else if (state.activeTab === "memory") await renderMemory();
     else await renderKeyState();
     dom.debugStatus.textContent = "";
   } catch (error) {
@@ -540,6 +707,9 @@ async function refreshDebug() {
     if (state.activeTab === "logs") {
       dom.logsEmpty.textContent = `Debug API unavailable — ${error.message}`;
       dom.logsEmpty.classList.remove("hidden");
+    } else if (state.activeTab === "memory") {
+      dom.memoryEmpty.textContent = `Debug API unavailable — ${error.message}`;
+      dom.memoryEmpty.classList.remove("hidden");
     }
   }
 }
@@ -617,6 +787,53 @@ async function renderKeyState() {
   dom.keySource.textContent = data.api_key.source;
 }
 
+function memoryRow(item) {
+  const current = item.conversation_id === state.conversationId;
+  const marker = current
+    ? ' <span class="text-violet-500 dark:text-violet-300" title="This chat">←</span>'
+    : "";
+  return `<tr class="text-ink-soft ${current ? "bg-elevated" : ""}">
+      <td class="px-3 py-2 font-mono text-[0.68rem] break-all">${escapeHtml(item.conversation_id)}${marker}</td>
+      <td class="px-3 py-2 text-right font-mono">${fmt(item.messages)}</td>
+      <td class="px-3 py-2 text-right whitespace-nowrap text-ink-faint">${clockTime(item.updated_at)}</td>
+    </tr>`;
+}
+
+async function renderMemory() {
+  const data = await debugRequest("/memory");
+  const settings = data.settings;
+
+  dom.memorySettings.innerHTML = [
+    statCard(
+      "Memory",
+      settings.enabled ? "on" : "off",
+      settings.enabled ? "text-emerald-600 dark:text-emerald-300" : "text-ink",
+    ),
+    statCard("Token budget", fmt(settings.token_budget)),
+    statCard("Max messages", fmt(settings.max_messages)),
+    statCard("Max chats", fmt(settings.max_conversations)),
+    statCard("TTL (min)", fmt(settings.ttl_minutes)),
+    statCard("Keep first", settings.keep_first ? "yes" : "no"),
+  ].join("");
+
+  dom.memoryConversation.textContent = state.conversationId ?? "none — requests are stateless";
+  const window_ = state.lastMemory;
+  const stored = data.items.find((item) => item.conversation_id === state.conversationId);
+  if (window_) {
+    dom.memoryWindow.textContent =
+      `${window_.stored_messages} message(s) stored → ${window_.window_messages} sent · ` +
+      `~${window_.estimated_tokens} tokens${window_.trimmed ? " · trimmed to fit" : ""}`;
+  } else if (stored) {
+    dom.memoryWindow.textContent = `${stored.messages} message(s) stored on the server.`;
+  } else {
+    dom.memoryWindow.textContent = "No server-side history for this chat yet.";
+  }
+  dom.memoryForget.disabled = !state.conversationId;
+
+  dom.memoryBody.innerHTML = data.items.map(memoryRow).join("");
+  dom.memoryEmpty.classList.toggle("hidden", data.items.length > 0);
+}
+
 /* -------------------------------------------------------------------------- */
 /* Wiring                                                                     */
 /* -------------------------------------------------------------------------- */
@@ -638,7 +855,7 @@ dom.input.addEventListener("keydown", (event) => {
 });
 
 dom.stop.addEventListener("click", () => state.controller?.abort());
-dom.newChat.addEventListener("click", resetConversation);
+dom.newChat.addEventListener("click", () => void resetConversation());
 
 dom.messages.addEventListener("click", async (event) => {
   const button = event.target.closest("[data-copy]");
@@ -693,6 +910,30 @@ dom.logsLevel.addEventListener("change", () => {
 
 dom.logsAutoscroll.addEventListener("change", () => {
   if (dom.logsAutoscroll.checked) dom.logsConsole.scrollTop = dom.logsConsole.scrollHeight;
+});
+
+dom.memoryClear.addEventListener("click", async () => {
+  await debugRequest("/memory", { method: "DELETE" });
+  state.lastMemory = null;
+  if (state.conversationState === "known") state.conversationState = "local";
+  await renderMemory();
+  toast("Forgot every stored conversation.");
+});
+
+dom.memoryForget.addEventListener("click", async () => {
+  const id = state.conversationId;
+  if (!id) return;
+  try {
+    await apiRequest(`/conversations/${encodeURIComponent(id)}`, { method: "DELETE" });
+  } catch (error) {
+    toast(error.message, "error");
+    return;
+  }
+  // Keep the visible transcript; the next turn re-seeds the same id.
+  state.conversationState = "local";
+  state.lastMemory = null;
+  await renderMemory();
+  toast("This chat was forgotten on the server.");
 });
 
 dom.keyForm.addEventListener("submit", async (event) => {
@@ -795,9 +1036,12 @@ function initTheme() {
 /* -------------------------------------------------------------------------- */
 /* Boot                                                                       */
 /* -------------------------------------------------------------------------- */
-function init() {
+async function init() {
   initTheme();
-  loadHistory();
+
+  // Prefer the server's copy of the conversation; fall back to the local one.
+  const restored = await restoreConversation();
+  if (!restored) loadHistory();
   state.messages.forEach(mountMessage);
   syncEmptyState();
   scrollToBottom(true);
@@ -809,6 +1053,10 @@ function init() {
 
   void refreshHealth();
   setInterval(() => void refreshHealth(), 15000);
+
+  // Lets the smoke test (and anyone else) wait for a fully wired page instead
+  // of guessing from the static HTML.
+  window.__leynaReady = true;
 }
 
-init();
+void init();
