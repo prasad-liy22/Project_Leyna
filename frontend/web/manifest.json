@@ -1,0 +1,11 @@
+{
+  "name": "Leyna Assistant",
+  "short_name": "Leyna",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#6750A4",
+  "description": "A Flutter frontend for the Leyna personal assistant.",
+  "orientation": "portrait-primary",
+  "prefer_related_applications": false
+}
