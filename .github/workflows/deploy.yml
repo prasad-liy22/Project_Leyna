@@ -23,7 +23,7 @@ jobs:
         run: |
           cd frontend
           flutter pub get
-          flutter build web --release --base-href "/Project_Leyna/"
+          flutter build web --release --base-href "/Project_Leyna/" --pwa-strategy none
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
