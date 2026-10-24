@@ -114,15 +114,20 @@ class _ChatScreenState extends State<ChatScreen> {
         title: const Text('Leyna'),
         actions: [
           _StatusIndicator(health: _health),
-          const SizedBox(width: 4),
+          
           if (widget.themeController != null)
             _ThemeToggleButton(controller: widget.themeController!),
+          
           TextButton.icon(
             onPressed: _toggleDebug,
             icon: const Icon(Icons.bug_report, size: 18),
-            label: const Text('Debug'),
+            label: const Text(
+              'Debug',
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
+            ),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 4),
         ],
       ),
       body: Column(
@@ -206,19 +211,21 @@ class _EmptyState extends StatelessWidget {
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.assistant, size: 56, color: theme.colorScheme.primary),
-            const SizedBox(height: 16),
-            Text('Say hello to Leyna', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Text(
-              'Your messages are sent to the Leyna backend.',
-              textAlign: TextAlign.center,
-              style: theme.textTheme.bodySmall,
-            ),
-          ],
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.assistant, size: 56, color: theme.colorScheme.primary),
+              const SizedBox(height: 16),
+              Text('Say hello to Leyna', style: theme.textTheme.titleMedium),
+              const SizedBox(height: 8),
+              Text(
+                'Your messages are sent to the Leyna backend.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodySmall,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -261,16 +268,24 @@ class _StatusIndicator extends StatelessWidget {
     return Tooltip(
       message: label,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+        padding: const EdgeInsets.symmetric(horizontal: 12),
         child: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
               width: 10,
               height: 10,
               decoration: BoxDecoration(color: color, shape: BoxShape.circle),
             ),
-            const SizedBox(width: 8),
-            Text(label, style: Theme.of(context).textTheme.bodySmall),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                label,
+                style: Theme.of(context).textTheme.bodySmall,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+              ),
+            ),
           ],
         ),
       ),

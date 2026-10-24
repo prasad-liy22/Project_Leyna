@@ -14,16 +14,59 @@
 // text-rose-600 dark:text-rose-300 text-emerald-600 dark:text-emerald-300
 // text-violet-500 dark:text-violet-300
 
-// The API base comes from the meta tag in index.html. A host page can override
-// it before this module runs (handy for embeds and for tests that target a
-// local backend): `window.__LEXYNA_API_BASE__ = "http://localhost:8000"`.
-const API_BASE = (
-  window.__LEXYNA_API_BASE__ ??
+// The API base comes from localStorage override, or window/meta, or same-origin.
+// Override via localStorage (set from Debug > Backend) takes precedence.
+const API_BASE_KEY = "leyna.apiBase.v1";
+const DEFAULT_API_BASE_META = (
   document.querySelector('meta[name="leyna-api-base"]')?.content ??
-  ""
+  "https://project-leyna.vercel.app"
 )
   .trim()
   .replace(/\/+$/, "");
+
+function getApiBase() {
+  try {
+    const saved = localStorage.getItem(API_BASE_KEY);
+    if (saved !== null) {
+      return saved.trim().replace(/\/+$/, "");
+    }
+  } catch {
+    /* storage unavailable */
+  }
+  const win = window.__LEXYNA_API_BASE__;
+  if (win) {
+    return String(win).trim().replace(/\/+$/, "");
+  }
+  const meta = document.querySelector('meta[name="leyna-api-base"]')?.content ?? "";
+  return meta.trim().replace(/\/+$/, "");
+}
+
+function setApiBase(url) {
+  const value = (url ?? "").trim().replace(/\/+$/, "");
+  try {
+    if (value) {
+      localStorage.setItem(API_BASE_KEY, value);
+    } else {
+      localStorage.removeItem(API_BASE_KEY);
+    }
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+function resetApiBase() {
+  try {
+    localStorage.removeItem(API_BASE_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+function formatApiBaseForDisplay(base) {
+  if (!base) return "(same origin)";
+  return base;
+}
+
 const HISTORY_KEY = "leyna.history.v1";
 const CONVERSATION_KEY = "leyna.conversation.v1";
 const ADMIN_KEY = "leyna.adminToken";
@@ -52,11 +95,12 @@ const dom = {
   debugClose: $("#debug-close"),
   debugStatus: $("#debug-status"),
   toasts: $("#toasts"),
-  tabs: $$("[data-tab]"),
   panelUsage: $("#panel-usage"),
   panelLogs: $("#panel-logs"),
   panelKey: $("#panel-api-key"),
   panelMemory: $("#panel-memory"),
+  panelBackend: $("#panel-backend"),
+  panelBackend: $("#panel-backend"),
   usageTotals: $("#usage-totals"),
   usageBody: $("#usage-table-body"),
   usageEmpty: $("#usage-empty"),
@@ -82,6 +126,23 @@ const dom = {
   memoryEmpty: $("#memory-empty"),
   memoryClear: $("#memory-clear"),
   memoryForget: $("#memory-forget"),
+  backendCurrent: $("#backend-current"),
+  backendPreset: $("#backend-preset"),
+  backendCustom: $("#backend-custom"),
+  backendTest: $("#backend-test"),
+  backendApply: $("#backend-apply"),
+  backendReset: $("#backend-reset"),
+  backendStatus: $("#backend-status"),
+  backendCurrent: $("#backend-current"),
+  backendForm: $("#backend-form"),
+  backendInput: $("#backend-input"),
+  backendTest: $("#backend-test"),
+  backendApply: $("#backend-apply"),
+  backendReset: $("#backend-reset"),
+  backendPresetLocal: $("#backend-preset-local"),
+  backendPresetRemote: $("#backend-preset-remote"),
+  backendPresetSame: $("#backend-preset-same"),
+  backendFeedback: $("#backend-feedback"),
 };
 
 const state = {
@@ -179,6 +240,10 @@ function toast(message, kind = "info") {
 /* -------------------------------------------------------------------------- */
 /* HTTP                                                                       */
 /* -------------------------------------------------------------------------- */
+function getCurrentApiBase() {
+  return getApiBase();
+}
+
 async function readError(response) {
   try {
     const data = await response.json();
@@ -196,7 +261,7 @@ function adminHeaders() {
 }
 
 async function apiRequest(path, options = {}) {
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${getApiBase()}${path}`, {
     ...options,
     headers: { "Content-Type": "application/json", ...(options.headers ?? {}) },
   });
@@ -216,7 +281,7 @@ function debugRequest(path, options = {}) {
 /* -------------------------------------------------------------------------- */
 async function refreshHealth() {
   try {
-    const response = await fetch(`${API_BASE}/health`);
+    const response = await fetch(`${getApiBase()}/health`);
     if (!response.ok) throw new Error();
     const data = await response.json();
     state.health = {
@@ -423,7 +488,7 @@ async function restoreConversation() {
 
   state.conversationId = stored;
   try {
-    const response = await fetch(`${API_BASE}/conversations/${encodeURIComponent(stored)}`);
+    const response = await fetch(`${getApiBase()}/conversations/${encodeURIComponent(stored)}`);
     if (!response.ok) {
       // Forgotten by the server (restart or TTL). Keep the transcript and let
       // the next request re-seed it.
@@ -508,7 +573,7 @@ function applyDone(message, event) {
 
 async function streamReply(payload, message, signal) {
   if (!canStream) {
-    const response = await fetch(`${API_BASE}/chat`, {
+    const response = await fetch(`${getApiBase()}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -522,7 +587,7 @@ async function streamReply(payload, message, signal) {
     return;
   }
 
-  const response = await fetch(`${API_BASE}/chat/stream`, {
+  const response = await fetch(`${getApiBase()}/chat/stream`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
@@ -672,11 +737,18 @@ function setFeedback(text, tone = "text-ink-soft") {
 
 function selectTab(tab) {
   state.activeTab = tab;
-  dom.tabs.forEach((button) => button.classList.toggle("tab-active", button.dataset.tab === tab));
+  const tabs = $$("[data-tab]");
+  tabs.forEach((button) => button.classList.toggle("tab-active", button.dataset.tab === tab));
   dom.panelUsage.classList.toggle("hidden", tab !== "usage");
   dom.panelLogs.classList.toggle("hidden", tab !== "logs");
   dom.panelKey.classList.toggle("hidden", tab !== "api-key");
   dom.panelMemory.classList.toggle("hidden", tab !== "memory");
+  if (dom.panelBackend) {
+    dom.panelBackend.classList.toggle("hidden", tab !== "backend");
+  }
+  if (tab === "backend") {
+    refreshBackendPanel();
+  }
   void refreshDebug();
 }
 
@@ -841,6 +913,40 @@ async function renderMemory() {
   dom.memoryEmpty.classList.toggle("hidden", data.items.length > 0);
 }
 
+function setBackendFeedback(text, tone = "text-ink-soft") {
+  if (!dom.backendFeedback) return;
+  dom.backendFeedback.className = `min-h-4 text-xs ${tone}`;
+  dom.backendFeedback.textContent = text || "";
+}
+
+function refreshBackendPanel() {
+  if (!dom.backendCurrent) return;
+  dom.backendCurrent.textContent = formatApiBaseForDisplay(getApiBase());
+  if (dom.backendInput) {
+    dom.backendInput.value = getApiBase();
+  }
+  setBackendFeedback("");
+}
+
+async function testBackendConnection(base) {
+  const candidate = (base ?? "").trim().replace(/\/+$/, "");
+  try {
+    const response = await fetch(`${candidate}/health`, { method: "GET" });
+    if (!response.ok) {
+      throw new Error(`${response.status} ${response.statusText}`);
+    }
+    const data = await response.json();
+    return {
+      ok: true,
+      model: data.model || "",
+      configured: Boolean(data.configured),
+      memoryEnabled: Boolean(data.memory_enabled),
+    };
+  } catch (error) {
+    throw error;
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Wiring                                                                     */
 /* -------------------------------------------------------------------------- */
@@ -893,7 +999,12 @@ document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && state.debugOpen) closeDebug();
 });
 
-dom.tabs.forEach((button) => button.addEventListener("click", () => selectTab(button.dataset.tab)));
+document.addEventListener("click", (event) => {
+  const button = event.target.closest("[data-tab]");
+  if (button && button.closest("#debug-drawer")) {
+    selectTab(button.dataset.tab);
+  }
+});
 
 dom.usageClear.addEventListener("click", async () => {
   await debugRequest("/usage", { method: "DELETE" });
@@ -986,6 +1097,60 @@ dom.adminToken.addEventListener("input", () => {
   void refreshDebug();
 });
 
+if (dom.backendPresetLocal) {
+  dom.backendPresetLocal.addEventListener("click", () => {
+    if (dom.backendInput) dom.backendInput.value = "http://localhost:8000";
+    setBackendFeedback("Set to http://localhost:8000");
+  });
+}
+if (dom.backendPresetRemote) {
+  dom.backendPresetRemote.addEventListener("click", () => {
+    if (dom.backendInput) dom.backendInput.value = DEFAULT_API_BASE_META;
+    setBackendFeedback("Set to remote default");
+  });
+}
+if (dom.backendPresetSame) {
+  dom.backendPresetSame.addEventListener("click", () => {
+    if (dom.backendInput) dom.backendInput.value = "";
+    setBackendFeedback("Set to same origin");
+  });
+}
+if (dom.backendTest) {
+  dom.backendTest.addEventListener("click", async () => {
+    const base = dom.backendInput ? dom.backendInput.value : getApiBase();
+    dom.backendTest.disabled = true;
+    setBackendFeedback("Testing…");
+    try {
+      const result = await testBackendConnection(base);
+      const status = result.configured ? "ready" : "no API key";
+      setBackendFeedback(
+        `OK — ${result.model || "unknown model"} (${status})`,
+        "text-emerald-600 dark:text-emerald-300",
+      );
+    } catch (error) {
+      setBackendFeedback(`Failed: ${error.message}`, "text-rose-600 dark:text-rose-300");
+    } finally {
+      dom.backendTest.disabled = false;
+    }
+  });
+}
+if (dom.backendReset) {
+  dom.backendReset.addEventListener("click", () => {
+    resetApiBase();
+    toast("Backend reset to default");
+    setTimeout(() => location.reload(), 200);
+  });
+}
+if (dom.backendForm) {
+  dom.backendForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const base = dom.backendInput ? dom.backendInput.value : "";
+    setApiBase(base);
+    toast("Backend updated. Reloading…");
+    setTimeout(() => location.reload(), 250);
+  });
+}
+
 /* -------------------------------------------------------------------------- */
 /* Theme                                                                      */
 /* -------------------------------------------------------------------------- */
@@ -1054,6 +1219,7 @@ async function init() {
   scrollToBottom(true);
 
   dom.adminToken.value = localStorage.getItem(ADMIN_KEY) ?? "";
+  refreshBackendPanel();
   autoGrow();
   updateSendState();
   dom.input.focus();

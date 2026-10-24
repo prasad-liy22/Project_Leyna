@@ -33,6 +33,7 @@ class DebugPanel extends StatefulWidget {
 class _DebugPanelState extends State<DebugPanel> {
   final TextEditingController _keyController = TextEditingController();
   final ScrollController _logScroll = ScrollController();
+  final TextEditingController _backendController = TextEditingController();
 
   DebugState? _state;
   UsageReport? _usage;
@@ -45,6 +46,7 @@ class _DebugPanelState extends State<DebugPanel> {
   bool _obscure = true;
   bool _persist = false;
   String? _keyStatus;
+  String? _backendStatus;
   Timer? _timer;
 
   @override
@@ -59,6 +61,7 @@ class _DebugPanelState extends State<DebugPanel> {
     _timer?.cancel();
     _keyController.dispose();
     _logScroll.dispose();
+    _backendController.dispose();
     super.dispose();
   }
 
@@ -212,7 +215,7 @@ class _DebugPanelState extends State<DebugPanel> {
         .toDouble();
 
     return DefaultTabController(
-      length: 3,
+      length: 4,
       child: Material(
         color: colors.surfaceContainer,
         child: Container(
@@ -237,10 +240,12 @@ class _DebugPanelState extends State<DebugPanel> {
                   ),
                 ),
               const TabBar(
+                isScrollable: true,
                 tabs: [
                   Tab(icon: Icon(Icons.bar_chart, size: 18), text: 'Usage'),
                   Tab(icon: Icon(Icons.terminal, size: 18), text: 'Logs'),
                   Tab(icon: Icon(Icons.key, size: 18), text: 'API Key'),
+                  Tab(icon: Icon(Icons.swap_horiz, size: 18), text: 'Backend'),
                 ],
               ),
               Expanded(
@@ -267,6 +272,7 @@ class _DebugPanelState extends State<DebugPanel> {
                             onClear: _clearLogs,
                           ),
                           _buildApiKeyTab(context),
+                          _buildBackendTab(context),
                         ],
                       ),
               ),
@@ -392,6 +398,103 @@ class _DebugPanelState extends State<DebugPanel> {
         ),
       ],
     );
+  }
+
+  Widget _buildBackendTab(BuildContext context) {
+    final theme = Theme.of(context);
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text('Switch backend', style: theme.textTheme.titleSmall),
+        const SizedBox(height: 4),
+        Text(
+          'Current: ${_state?.baseUrl ?? 'unknown'}',
+          style: theme.textTheme.bodySmall,
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _backendController,
+          enabled: !_busy,
+          decoration: const InputDecoration(
+            labelText: 'Backend URL',
+            hintText: 'http://localhost:8000 or https://example.com',
+            isDense: true,
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton(
+              onPressed: _busy
+                  ? null
+                  : () => _backendController.text = 'http://localhost:8000',
+              child: const Text('Localhost :8000'),
+            ),
+            OutlinedButton(
+              onPressed: _busy
+                  ? null
+                  : () => _backendController.text =
+                      'https://project-leyna.vercel.app',
+              child: const Text('Remote'),
+            ),
+            OutlinedButton(
+              onPressed: _busy ? null : () => _backendController.text = '',
+              child: const Text('Same origin'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            FilledButton.icon(
+              onPressed: _busy ? null : _applyBackend,
+              icon: const Icon(Icons.check, size: 16),
+              label: const Text('Apply'),
+            ),
+            const Spacer(),
+            if (_busy)
+              const SizedBox(
+                width: 16,
+                height: 16,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              ),
+          ],
+        ),
+        if (_backendStatus != null) ...[
+          const SizedBox(height: 12),
+          Text(_backendStatus!, style: theme.textTheme.bodySmall),
+        ],
+        const SizedBox(height: 12),
+        Text(
+          'This app uses a build-time base URL (dart-define). To switch at runtime you need to rebuild or use a different build. '
+          'For web/dev, you can also pass --dart-define=API_BASE_URL=...',
+          style: theme.textTheme.bodySmall?.copyWith(fontSize: 11),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _applyBackend() async {
+    final url = _backendController.text.trim();
+    setState(() {
+      _busy = true;
+      _backendStatus = null;
+    });
+    try {
+      // We can't change compile-time config at runtime in Flutter; just report the target.
+      await Future.delayed(const Duration(milliseconds: 200));
+      if (!mounted) return;
+      setState(() {
+        _backendStatus = url.isEmpty
+            ? 'Target: same origin (use --dart-define=API_BASE_URL or rebuild).'
+            : 'Target: $url (use --dart-define=API_BASE_URL or rebuild).';
+      });
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 }
 

@@ -207,11 +207,12 @@
         </button>
       </div>
 
-      <div class="flex gap-1 border-b border-line px-3 py-2">
+      <div class="flex gap-1 border-b border-line px-3 py-2 overflow-x-auto">
         <button class="tab tab-active" data-tab="usage" type="button">Usage</button>
         <button class="tab" data-tab="logs" type="button">Logs</button>
         <button class="tab" data-tab="api-key" type="button">API key</button>
         <button class="tab" data-tab="memory" type="button">Memory</button>
+        <button class="tab" data-tab="backend" type="button">Backend</button>
       </div>
 
       <div class="flex-1 overflow-y-auto p-4">
@@ -376,6 +377,50 @@
             <p id="memory-empty" class="px-3 py-6 text-center text-xs text-ink-faint">
               No conversations stored.
             </p>
+          </div>
+        </section>
+
+        <!-- ---------------------------- Backend ----------------------------- -->
+        <section id="panel-backend" class="hidden space-y-4">
+          <div class="card space-y-2 p-4">
+            <p class="text-xs font-semibold tracking-wide text-ink-faint uppercase">Current backend</p>
+            <p id="backend-current" class="font-mono text-sm break-all text-ink">—</p>
+            <p class="text-[0.7rem] text-ink-faint">Leave empty to use same origin.</p>
+          </div>
+
+          <div class="card space-y-3 p-4">
+            <p class="text-xs font-semibold tracking-wide text-ink-faint uppercase">Quick switch</p>
+            <div class="flex flex-wrap gap-2">
+              <button id="backend-preset-local" class="btn btn-ghost !px-2 !py-1 text-xs" type="button">Localhost :8000</button>
+              <button id="backend-preset-remote" class="btn btn-ghost !px-2 !py-1 text-xs" type="button">Remote server</button>
+              <button id="backend-preset-same" class="btn btn-ghost !px-2 !py-1 text-xs" type="button">Same origin</button>
+            </div>
+          </div>
+
+          <form id="backend-form" class="card space-y-3 p-4">
+            <label class="block space-y-1.5">
+              <span class="text-xs font-semibold tracking-wide text-ink-faint uppercase">Backend URL</span>
+              <input
+                id="backend-input"
+                type="url"
+                inputmode="url"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="http://localhost:8000 or https://your-backend.example.com"
+                class="field font-mono text-sm"
+              />
+            </label>
+            <div class="flex gap-2">
+              <button id="backend-test" class="btn flex-1" type="button">Test connection</button>
+              <button id="backend-apply" class="btn btn-primary flex-1" type="submit">Apply &amp; reload</button>
+            </div>
+            <button id="backend-reset" class="btn btn-ghost w-full" type="button">Reset to default</button>
+            <p id="backend-feedback" class="min-h-4 text-xs"></p>
+          </form>
+
+          <div class="text-[0.7rem] text-ink-faint">
+            <p>Switching backends reloads the page.</p>
+            <p class="mt-1">If pointing to another origin, ensure CORS allows this page.</p>
           </div>
         </section>
       </div>
