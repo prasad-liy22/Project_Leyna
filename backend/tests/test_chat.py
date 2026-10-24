@@ -22,7 +22,7 @@ def _non_stream_response() -> httpx.Response:
         200,
         json={
             "model": "gemma4:31b-cloud",
-            "message": {"role": "assistant", "content": "Hello, I am Leyna."},
+            "message": {"role": "assistant", "content": "Hello, I am Nimna."},
             "done": True,
             "prompt_eval_count": 12,
             "eval_count": 7,
@@ -94,7 +94,7 @@ def test_chat_returns_message(client: TestClient) -> None:
     assert response.status_code == 200
     body = response.json()
     assert body["message"]["role"] == "assistant"
-    assert body["message"]["content"] == "Hello, I am Leyna."
+    assert body["message"]["content"] == "Hello, I am Nimna."
     assert body["completion_tokens"] == 7
 
 

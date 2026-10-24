@@ -111,7 +111,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Leyna'),
+        title: const Text('Nimna'),
         actions: [
           _StatusIndicator(health: _health),
           
@@ -181,7 +181,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => _send(),
                 decoration: const InputDecoration(
-                  hintText: 'Ask Leyna anything…',
+                  hintText: 'Ask Nimna anything…',
                   border: OutlineInputBorder(),
                   isDense: true,
                   contentPadding:
@@ -217,10 +217,10 @@ class _EmptyState extends StatelessWidget {
             children: [
               Icon(Icons.assistant, size: 56, color: theme.colorScheme.primary),
               const SizedBox(height: 16),
-              Text('Say hello to Leyna', style: theme.textTheme.titleMedium),
+              Text('Say hello to Nimna', style: theme.textTheme.titleMedium),
               const SizedBox(height: 8),
               Text(
-                'Your messages are sent to the Leyna backend.',
+                'Your messages are sent to the Nimna backend.',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall,
               ),

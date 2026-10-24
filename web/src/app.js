@@ -1,4 +1,4 @@
-/* Leyna web UI — a dependency-free client for the FastAPI backend.
+/* Nimna web UI — a dependency-free client for the FastAPI backend.
  *
  * Handles: streaming chat over SSE, a persisted conversation, a health probe,
  * the debug drawer (token usage, live server logs, runtime API-key swap), and

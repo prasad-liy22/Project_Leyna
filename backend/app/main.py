@@ -52,7 +52,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     runtime.attach_log_handler()
 
     if settings.is_configured:
-        logger.info("Leyna ready — model=%s endpoint=%s", settings.ollama_model, settings.chat_url)
+        logger.info("Nimna ready — model=%s endpoint=%s", settings.ollama_model, settings.chat_url)
     else:
         logger.warning("OLLAMA_API_KEY is not set; /chat will return an error until you add it.")
 
@@ -75,7 +75,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title="Leyna — Personal Assistant API",
+    title="Nimna — Personal Assistant API",
     description="A small chat API backed by Ollama Cloud.",
     version=__version__,
     lifespan=lifespan,

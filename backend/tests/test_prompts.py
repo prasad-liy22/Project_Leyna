@@ -34,7 +34,7 @@ def test_persona_keeps_its_sections() -> None:
 
 
 def test_persona_names_leyan_and_her_languages() -> None:
-    assert "Leyna" in DEFAULT_SYSTEM_PROMPT
+    assert "Nimna" in DEFAULT_SYSTEM_PROMPT
     assert "Sinhala" in DEFAULT_SYSTEM_PROMPT
     assert "Singlish" in DEFAULT_SYSTEM_PROMPT
 

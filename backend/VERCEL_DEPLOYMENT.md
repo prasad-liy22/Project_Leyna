@@ -1,4 +1,4 @@
-# Deploying the Leyna backend to Vercel
+# Deploying the Nimna backend to Vercel
 
 This guide makes the FastAPI service in `backend/` run on Vercel using its
 **native Python runtime** — the existing app object, the existing routes, and

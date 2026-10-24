@@ -1,4 +1,4 @@
-// End-to-end smoke test for the Leyna web UI.
+// End-to-end smoke test for the Nimna web UI.
 //
 // Drives the real page in headless Chrome over the DevTools Protocol using
 // Node's built-in WebSocket (no dependencies). `/chat/stream` is stubbed inside
@@ -112,7 +112,7 @@ function pageTest() {
 
         const frames = [
           'data: {"delta":"Hello "}' + SEP,
-          'data: {"delta":"**world** from Leyna"}' + SEP,
+          'data: {"delta":"**world** from Nimna"}' + SEP,
           "data: " + JSON.stringify(done) + SEP,
         ];
         const encoder = new TextEncoder();
@@ -288,7 +288,7 @@ const EXPECTED = {
   sendEnabledWithText: true,
   messageCount: 2,
   userText: "ping",
-  assistantText: "Hello world from Leyna",
+  assistantText: "Hello world from Nimna",
   assistantRenderedBold: true,
   tokenChip: "↑ 5 · ↓ 2",
   emptyStateHidden: true,
@@ -346,7 +346,7 @@ function check(results) {
     // Second pass, after a reload with a conversation the server forgot.
     equal("restoredBubbles", results.restoredBubbles, 2);
     equal("restoredUserText", results.restoredUserText, "again");
-    equal("restoredAssistantText", results.restoredAssistantText, "Hello world from Leyna");
+    equal("restoredAssistantText", results.restoredAssistantText, "Hello world from Nimna");
     equal("reseedConversationId", results.reseedConversationId, results.storedConversationId);
     equal("reseedMessageCount", results.reseedMessageCount, 3);
     equal("afterResendBubbles", results.afterResendBubbles, 4);

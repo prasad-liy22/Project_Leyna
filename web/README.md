@@ -1,6 +1,6 @@
-# Leyna — Web UI
+# Nimna — Web UI
 
-A dependency-free single-page chat client for the Leyna backend, styled with
+A dependency-free single-page chat client for the Nimna backend, styled with
 [Tailwind CSS](https://tailwindcss.com/). It is **served by the FastAPI backend
 at `/`**, so there is nothing to install at runtime and no second dev server.
 

@@ -45,7 +45,7 @@ class _FakeDebugBackend implements DebugBackend {
         model: 'gemma4:31b-cloud',
         baseUrl: 'https://ollama.com',
         chatUrl: 'https://ollama.com/api/chat',
-        systemPrompt: 'You are Leyna.',
+        systemPrompt: 'You are Nimna.',
         requestTimeout: 120,
         apiKey:
             ApiKeyInfo(configured: true, source: source, masked: 'env-…7890'),
@@ -111,7 +111,7 @@ class _FakeDebugBackend implements DebugBackend {
 
 void main() {
   testWidgets('sends a message and renders the reply', (tester) async {
-    final backend = _FakeBackend(reply: 'Hi, I am Leyna.');
+    final backend = _FakeBackend(reply: 'Hi, I am Nimna.');
     await tester.pumpWidget(MaterialApp(home: ChatScreen(backend: backend)));
     await tester.pumpAndSettle();
 
@@ -120,7 +120,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Hello'), findsOneWidget);
-    expect(find.text('Hi, I am Leyna.'), findsOneWidget);
+    expect(find.text('Hi, I am Nimna.'), findsOneWidget);
     expect(backend.calls.single.last.text, 'Hello');
     expect(backend.calls.single.last.role, ChatRole.user);
   });
@@ -209,7 +209,7 @@ void main() {
     final controller = ThemeController();
     addTearDown(controller.dispose);
 
-    await tester.pumpWidget(LeynaApp(
+    await tester.pumpWidget(NimnaApp(
       backend: _FakeBackend(),
       debugBackend: _FakeDebugBackend(),
       themeController: controller,
@@ -247,7 +247,7 @@ void main() {
     final controller = ThemeController();
     addTearDown(controller.dispose);
 
-    await tester.pumpWidget(LeynaApp(
+    await tester.pumpWidget(NimnaApp(
       backend: _FakeBackend(),
       debugBackend: _FakeDebugBackend(),
       themeController: controller,

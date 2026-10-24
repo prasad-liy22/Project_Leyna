@@ -1,4 +1,4 @@
-# Leyna — Personal Assistant Backend
+# Nimna — Personal Assistant Backend
 
 A small [FastAPI](https://fastapi.tiangolo.com/) backend for a personal
 assistant. It exposes a chat API that forwards conversations to an external LLM
@@ -26,7 +26,7 @@ This service lives in `backend/`. All commands below are run from that folder.
 ```
 app/
   config.py        # environment-driven settings
-  prompts.py       # the default Leyna persona (system prompt)
+  prompts.py       # the default Nimna persona (system prompt)
   schemas.py       # request/response models
   ollama.py        # async client for the Ollama chat API
   conversations.py # in-memory short-term memory (transcripts + windowing)
@@ -290,7 +290,7 @@ All settings are read from the environment (or `.env`). See `.env.example`.
 | `OLLAMA_API_KEY`  | *(empty)*                     | Bearer token for ollama.com. **Required.** |
 | `OLLAMA_BASE_URL` | `https://ollama.com`          | Use `http://localhost:11434` for local Ollama. |
 | `OLLAMA_MODEL`    | `gemma4:31b-cloud`            | Model name sent to the API.              |
-| `SYSTEM_PROMPT`   | Built-in Leyna persona        | Default persona for every conversation; see `app/prompts.py`. |
+| `SYSTEM_PROMPT`   | Built-in Nimna persona        | Default persona for every conversation; see `app/prompts.py`. |
 | `REQUEST_TIMEOUT` | `120`                         | Upstream timeout in seconds.             |
 | `MEMORY_ENABLED`  | `true`                        | Keep server-side transcripts.            |
 | `MEMORY_TOKEN_BUDGET` | `3000`                    | Approximate tokens of history sent to the model. |
@@ -306,7 +306,7 @@ All settings are read from the environment (or `.env`). See `.env.example`.
 ### Notes
 
 - **Persona.** The default system prompt lives in
-  [`app/prompts.py`](app/prompts.py) — one place to edit Leyna's tone. Override
+  [`app/prompts.py`](app/prompts.py) — one place to edit Nimna's tone. Override
   it for a single request with the `system` field, or globally with
   `SYSTEM_PROMPT`. It is prepended to every request, so it counts against the
   context window.

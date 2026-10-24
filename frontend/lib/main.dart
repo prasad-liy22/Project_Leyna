@@ -6,13 +6,13 @@ import 'src/screens/chat_screen.dart';
 import 'src/theme.dart';
 
 void main() {
-  runApp(const LeynaApp());
+  runApp(const NimnaApp());
 }
 
 /// The application root: wires the theme controller into [MaterialApp] so the
 /// light/dark preference is applied everywhere.
-class LeynaApp extends StatefulWidget {
-  const LeynaApp({
+class NimnaApp extends StatefulWidget {
+  const NimnaApp({
     super.key,
     this.backend,
     this.debugBackend,
@@ -29,10 +29,10 @@ class LeynaApp extends StatefulWidget {
   final ThemeController? themeController;
 
   @override
-  State<LeynaApp> createState() => _LeynaAppState();
+  State<NimnaApp> createState() => _NimnaAppState();
 }
 
-class _LeynaAppState extends State<LeynaApp> {
+class _NimnaAppState extends State<NimnaApp> {
   late final ThemeController _theme;
   late final bool _ownsTheme;
 
@@ -56,7 +56,7 @@ class _LeynaAppState extends State<LeynaApp> {
     return ValueListenableBuilder<ThemeMode>(
       valueListenable: _theme,
       builder: (context, mode, _) => MaterialApp(
-        title: 'Leyna Assistant',
+        title: 'Nimna Assistant',
         debugShowCheckedModeBanner: false,
         theme: leynaLightTheme,
         darkTheme: leynaDarkTheme,

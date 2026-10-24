@@ -33,7 +33,7 @@ abstract class ChatBackend {
   Future<String> sendMessage(List<ChatMessage> messages);
 }
 
-/// Talks to the Leyna FastAPI backend over HTTP.
+/// Talks to the Nimna FastAPI backend over HTTP.
 class ChatApi implements ChatBackend {
   ChatApi({String? baseUrl, http.Client? client})
       : baseUrl = baseUrl ?? AppConfig.apiBaseUrl,

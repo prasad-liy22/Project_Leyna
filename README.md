@@ -1,4 +1,4 @@
-# Leyna — Personal Assistant
+# Nimna — Personal Assistant
 
 A personal assistant split into three parts:
 
@@ -16,7 +16,7 @@ The backend also keeps **short-term memory**: when a client sends a
 newest slice that fits a token budget. See
 [backend/README.md](backend/README.md#short-term-memory).
 
-Leyna's tone comes from a single persona prompt in
+Nimna's tone comes from a single persona prompt in
 [`backend/app/prompts.py`](backend/app/prompts.py): warm, playful, and
 **Sinhala-first** (she understands Singlish and replies in Sinhala Unicode by
 default). Edit that file to reshape her, or override it per request.

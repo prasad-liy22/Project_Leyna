@@ -1,6 +1,6 @@
-# Leyna Frontend (Flutter)
+# Nimna Frontend (Flutter)
 
-A minimal chat UI for the [Leyna backend](../backend/README.md), targeting
+A minimal chat UI for the [Nimna backend](../backend/README.md), targeting
 **web**. It sends the conversation to `POST /chat` and shows the reply, with a
 small connectivity indicator in the app bar.
 

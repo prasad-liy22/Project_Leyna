@@ -44,7 +44,7 @@ class Settings(BaseSettings):
     system_prompt: str = Field(
         default=DEFAULT_SYSTEM_PROMPT,
         description="Default system prompt used when a request does not "
-        "provide its own. Defaults to the built-in Leyna persona.",
+        "provide its own. Defaults to the built-in Nimna persona.",
     )
 
     # --- Short-term memory --------------------------------------------------

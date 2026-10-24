@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// Seed colour shared by both schemes, so light and dark stay recognisably Leyna.
+/// Seed colour shared by both schemes, so light and dark stay recognisably Nimna.
 const Color _seed = Color(0xFF6750A4);
 
 ThemeData _buildTheme(Brightness brightness) => ThemeData(
