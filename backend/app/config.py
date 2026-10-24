@@ -51,6 +51,10 @@ class Settings(BaseSettings):
     # Requests are stateless unless they send a `conversation_id`; when they do,
     # the server keeps the transcript and sends the model only the newest slice
     # of it that fits `memory_token_budget`.
+    memory_backend: str = Field(
+        default="memory",
+        description="Memory backend: 'memory' (in-memory) or 'db' (persistent DB).",
+    )
     memory_enabled: bool = Field(
         default=True,
         description="Keep server-side short-term memory for requests that send "

@@ -22,7 +22,10 @@ from fastapi import APIRouter, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from .config import Settings, get_settings
-from .conversations import conversations
+try:
+    from .conversations import conversations
+except Exception:  # pragma: no cover
+    from .db_conversations import conversations
 from .runtime import mask_key, parse_level, persist_api_key, runtime
 from .schemas import ConversationSummary, MemoryReport, MemorySettings, OkResponse
 

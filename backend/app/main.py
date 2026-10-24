@@ -20,7 +20,10 @@ from fastapi.staticfiles import StaticFiles
 
 from . import __version__
 from .config import Settings, get_settings
-from .conversations import Conversation, MemoryConfig, conversations, iso, window
+try:
+    from .conversations import Conversation, MemoryConfig, conversations, iso, window
+except Exception:  # pragma: no cover
+    from .db_conversations import Conversation, MemoryConfig, conversations, iso, window
 from .debug import require_admin
 from .debug import router as debug_router
 from .ollama import OllamaClient, OllamaError, sse_frame
