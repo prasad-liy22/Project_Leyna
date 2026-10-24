@@ -67,9 +67,10 @@ function formatApiBaseForDisplay(base) {
   return base;
 }
 
-const HISTORY_KEY = "leyna.history.v1";
-const CONVERSATION_KEY = "leyna.conversation.v1";
-const ADMIN_KEY = "leyna.adminToken";
+const HISTORY_KEY = "nimna.history.v1";
+const CONVERSATION_KEY = "nimna.conversation.v1";
+const ADMIN_KEY = "nimna.adminToken";
+const AUTH_KEY = "nimna.auth";
 const POLL_MS = 2000;
 
 const $ = (selector) => document.querySelector(selector);
@@ -1365,8 +1366,44 @@ function initTheme() {
 /* -------------------------------------------------------------------------- */
 /* Boot                                                                       */
 /* -------------------------------------------------------------------------- */
+function checkAuth() {
+  try {
+    if (localStorage.getItem(AUTH_KEY) === "true") {
+      if (dom.loginOverlay) dom.loginOverlay.classList.add("hidden");
+      return true;
+    }
+  } catch {}
+  if (dom.loginOverlay) dom.loginOverlay.classList.remove("hidden");
+  return false;
+}
+
+function initAuth() {
+  if (dom.loginForm) {
+    dom.loginForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const user = dom.loginUser?.value || "";
+      const pass = dom.loginPass?.value || "";
+      if (user === "me" && pass === "123") {
+        try { localStorage.setItem(AUTH_KEY, "true"); } catch {}
+        if (dom.loginOverlay) dom.loginOverlay.classList.add("hidden");
+        if (dom.loginError) {
+          dom.loginError.classList.add("hidden");
+          dom.loginError.textContent = "";
+        }
+      } else {
+        if (dom.loginError) {
+          dom.loginError.textContent = "Invalid username or password";
+          dom.loginError.classList.remove("hidden");
+        }
+      }
+    });
+  }
+  checkAuth();
+}
+
 async function init() {
   initTheme();
+  initAuth();
 
   // Prefer the server's copy of the conversation; fall back to the local one.
   const restored = await restoreConversation();

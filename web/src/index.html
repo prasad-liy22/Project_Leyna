@@ -51,6 +51,33 @@
       });
     });
   </script>
+
+  <!-- Login overlay -->
+  <div id="login-overlay" class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/90 backdrop-blur-sm">
+    <div class="card w-full max-w-sm p-6 space-y-4 mx-4">
+      <div class="text-center space-y-1">
+        <div class="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-500 text-xl shadow-lg shadow-violet-950/40">
+          💫
+        </div>
+        <h2 class="text-lg font-semibold text-ink">Sign in to Nimna</h2>
+        <p class="text-xs text-ink-faint">Enter your credentials to continue</p>
+      </div>
+      <form id="login-form" class="space-y-3">
+        <label class="block space-y-1.5">
+          <span class="text-xs font-semibold tracking-wide text-ink-faint uppercase">Username</span>
+          <input id="login-user" class="field" placeholder="Username" autocomplete="username" required />
+        </label>
+        <label class="block space-y-1.5">
+          <span class="text-xs font-semibold tracking-wide text-ink-faint uppercase">Password</span>
+          <input id="login-pass" type="password" class="field" placeholder="Password" autocomplete="current-password" required />
+        </label>
+        <button class="btn btn-primary w-full" type="submit">Login</button>
+      </form>
+      <p id="login-error" class="text-xs text-rose-500 hidden text-center"></p>
+    </div>
+  </div>
+
+  <script type="module" src="./app.js"></script>
 </body>
 
 </html>
