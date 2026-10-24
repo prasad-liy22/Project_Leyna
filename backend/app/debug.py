@@ -218,3 +218,64 @@ async def clear_memory() -> OkResponse:
     """Forget every stored conversation."""
     conversations.clear()
     return OkResponse()
+
+
+@router.get("/db-logs")
+async def get_db_logs(limit: int = 50):
+    """View recent conversation/memory activity from the database."""
+    try:
+        from . import database, models
+        from sqlalchemy.orm import Session
+
+        db: Session = database.SessionLocal()
+        try:
+            convs = (
+                db.query(models.ConversationModel)
+                .order_by(models.ConversationModel.updated_at.desc())
+                .limit(limit)
+                .all()
+            )
+            result = []
+            for c in convs:
+                msgs = (
+                    db.query(models.MessageModel)
+                    .filter_by(conversation_id=c.id)
+                    .order_by(models.MessageModel.position)
+                    .all()
+                )
+                result.append(
+                    {
+                        "conversation_id": c.id,
+                        "created_at": c.created_at,
+                        "updated_at": c.updated_at,
+                        "message_count": len(msgs),
+                        "messages": [
+                            {"role": m.role, "content": m.content[:200]}
+                            for m in msgs
+                        ],
+                    }
+                )
+            return {"conversations": result}
+        finally:
+            db.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/db-logs", response_model=OkResponse)
+async def clear_db_logs() -> OkResponse:
+    """Clear all persistent memory logs from the database."""
+    try:
+        from . import database, models
+        from sqlalchemy.orm import Session
+
+        db: Session = database.SessionLocal()
+        try:
+            db.query(models.MessageModel).delete()
+            db.query(models.ConversationModel).delete()
+            db.commit()
+            return OkResponse()
+        finally:
+            db.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

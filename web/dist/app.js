@@ -99,7 +99,12 @@ const dom = {
   panelLogs: $("#panel-logs"),
   panelKey: $("#panel-api-key"),
   panelMemory: $("#panel-memory"),
+  panelDb: $("#panel-db"),
   panelBackend: $("#panel-backend"),
+  dbLogs: $("#db-logs"),
+  dbEmpty: $("#db-empty"),
+  dbRefresh: $("#db-refresh"),
+  dbClear: $("#db-clear"),
   panelBackend: $("#panel-backend"),
   usageTotals: $("#usage-totals"),
   usageBody: $("#usage-table-body"),
@@ -127,12 +132,15 @@ const dom = {
   memoryClear: $("#memory-clear"),
   memoryForget: $("#memory-forget"),
   backendCurrent: $("#backend-current"),
-  backendPreset: $("#backend-preset"),
-  backendCustom: $("#backend-custom"),
+  backendForm: $("#backend-form"),
+  backendInput: $("#backend-input"),
   backendTest: $("#backend-test"),
   backendApply: $("#backend-apply"),
   backendReset: $("#backend-reset"),
-  backendStatus: $("#backend-status"),
+  backendFeedback: $("#backend-feedback"),
+  backendPresetLocal: $("#backend-preset-local"),
+  backendPresetRemote: $("#backend-preset-remote"),
+  backendPresetSame: $("#backend-preset-same"),
   backendCurrent: $("#backend-current"),
   backendForm: $("#backend-form"),
   backendInput: $("#backend-input"),
@@ -743,11 +751,17 @@ function selectTab(tab) {
   dom.panelLogs.classList.toggle("hidden", tab !== "logs");
   dom.panelKey.classList.toggle("hidden", tab !== "api-key");
   dom.panelMemory.classList.toggle("hidden", tab !== "memory");
+  if (dom.panelDb) {
+    dom.panelDb.classList.toggle("hidden", tab !== "db");
+  }
   if (dom.panelBackend) {
     dom.panelBackend.classList.toggle("hidden", tab !== "backend");
   }
   if (tab === "backend") {
     refreshBackendPanel();
+  }
+  if (tab === "db") {
+    void refreshDbLogs();
   }
   void refreshDebug();
 }
@@ -866,6 +880,46 @@ async function renderKeyState() {
   dom.keySource.textContent = data.api_key.source;
 }
 
+function setBackendFeedback(text, tone = "text-ink-faint") {
+  if (!dom.backendFeedback) return;
+  dom.backendFeedback.className = `min-h-4 text-xs ${tone}`;
+  dom.backendFeedback.textContent = text;
+}
+
+function refreshBackendPanel() {
+  if (!dom.backendCurrent) return;
+  const base = getCurrentApiBase();
+  dom.backendCurrent.textContent = base ? base : "(same origin)";
+  if (dom.backendInput) {
+    let saved = "";
+    try {
+      saved = localStorage.getItem(API_BASE_KEY) || "";
+    } catch {
+      saved = "";
+    }
+    dom.backendInput.value = saved;
+  }
+  setBackendFeedback("");
+}
+
+async function testBackendConnection() {
+  if (!dom.backendInput) return;
+  const val = dom.backendInput.value.trim();
+  const candidate = val ? val.replace(/\/+$/, "") : "";
+  setBackendFeedback("Testing…", "text-ink-faint");
+  try {
+    const res = await fetch(`${candidate}/health`, { method: "GET" });
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+    const data = await res.json();
+    setBackendFeedback(
+      `OK — ${data.model || "connected"}${data.configured ? "" : " (no API key configured)"}`,
+      "text-emerald-600 dark:text-emerald-300",
+    );
+  } catch (error) {
+    setBackendFeedback(`Failed: ${error.message}`, "text-rose-600 dark:text-rose-300");
+  }
+}
+
 function memoryRow(item) {
   const current = item.conversation_id === state.conversationId;
   const marker = current
@@ -947,6 +1001,47 @@ async function testBackendConnection(base) {
   }
 }
 
+async function refreshDbLogs() {
+  if (!dom.dbLogs) return;
+  try {
+    const data = await debugRequest("/db-logs?limit=50");
+    const convs = data.conversations || [];
+    dom.dbLogs.innerHTML = "";
+    if (!convs.length) {
+      if (dom.dbEmpty) dom.dbEmpty.classList.remove("hidden");
+      return;
+    }
+    if (dom.dbEmpty) dom.dbEmpty.classList.add("hidden");
+    for (const c of convs) {
+      const card = el("div", "card p-3 space-y-2");
+      const header = el("div", "flex items-center gap-2");
+      const id = el("p", "flex-1 font-mono text-[0.68rem] break-all text-ink");
+      id.textContent = c.conversation_id;
+      const count = el("span", "chip !py-0.5");
+      count.textContent = `${c.message_count} msg`;
+      header.append(id, count);
+      card.appendChild(header);
+      const list = el("div", "space-y-1");
+      for (const m of c.messages || []) {
+        const row = el("div", "text-xs");
+        const role = el("span", "text-ink-faint");
+        role.textContent = m.role + ": ";
+        const content = el("span", "text-ink-soft break-words");
+        content.textContent = m.content || "";
+        row.append(role, content);
+        list.appendChild(row);
+      }
+      card.appendChild(list);
+      dom.dbLogs.appendChild(card);
+    }
+  } catch (error) {
+    if (dom.dbEmpty) {
+      dom.dbEmpty.textContent = `Failed: ${error.message}`;
+      dom.dbEmpty.classList.remove("hidden");
+    }
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Wiring                                                                     */
 /* -------------------------------------------------------------------------- */
@@ -1005,6 +1100,53 @@ document.addEventListener("click", (event) => {
     selectTab(button.dataset.tab);
   }
 });
+
+if (dom.backendPresetLocal && dom.backendInput) {
+  dom.backendPresetLocal.addEventListener("click", () => {
+    dom.backendInput.value = "http://localhost:8000";
+  });
+}
+if (dom.backendPresetRemote && dom.backendInput) {
+  dom.backendPresetRemote.addEventListener("click", () => {
+    dom.backendInput.value = "https://project-leyna.vercel.app";
+  });
+}
+if (dom.backendPresetSame && dom.backendInput) {
+  dom.backendPresetSame.addEventListener("click", () => {
+    dom.backendInput.value = "";
+  });
+}
+
+if (dom.backendTest) {
+  dom.backendTest.addEventListener("click", (e) => {
+    e.preventDefault();
+    void testBackendConnection();
+  });
+}
+
+if (dom.backendForm && dom.backendInput) {
+  dom.backendForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    setApiBase(dom.backendInput.value);
+    toast("Backend updated. Reloading…");
+    setTimeout(() => {
+      window.location.reload();
+    }, 400);
+  });
+}
+
+if (dom.backendReset) {
+  dom.backendReset.addEventListener("click", (e) => {
+    e.preventDefault();
+    resetApiBase();
+    if (dom.backendInput) dom.backendInput.value = "";
+    setBackendFeedback("Reset to default. Reloading…", "text-ink-faint");
+    toast("Reset to default. Reloading…");
+    setTimeout(() => {
+      window.location.reload();
+    }, 400);
+  });
+}
 
 dom.usageClear.addEventListener("click", async () => {
   await debugRequest("/usage", { method: "DELETE" });
@@ -1096,6 +1238,21 @@ dom.adminToken.addEventListener("input", () => {
   else localStorage.removeItem(ADMIN_KEY);
   void refreshDebug();
 });
+
+if (dom.dbRefresh) {
+  dom.dbRefresh.addEventListener("click", () => void refreshDbLogs());
+}
+if (dom.dbClear) {
+  dom.dbClear.addEventListener("click", async () => {
+    try {
+      await debugRequest("/db-logs", { method: "DELETE" });
+      toast("DB logs cleared");
+      await refreshDbLogs();
+    } catch (error) {
+      toast(error.message, "error");
+    }
+  });
+}
 
 if (dom.backendPresetLocal) {
   dom.backendPresetLocal.addEventListener("click", () => {

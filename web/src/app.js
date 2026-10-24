@@ -99,7 +99,12 @@ const dom = {
   panelLogs: $("#panel-logs"),
   panelKey: $("#panel-api-key"),
   panelMemory: $("#panel-memory"),
+  panelDb: $("#panel-db"),
   panelBackend: $("#panel-backend"),
+  dbLogs: $("#db-logs"),
+  dbEmpty: $("#db-empty"),
+  dbRefresh: $("#db-refresh"),
+  dbClear: $("#db-clear"),
   panelBackend: $("#panel-backend"),
   usageTotals: $("#usage-totals"),
   usageBody: $("#usage-table-body"),
@@ -746,11 +751,17 @@ function selectTab(tab) {
   dom.panelLogs.classList.toggle("hidden", tab !== "logs");
   dom.panelKey.classList.toggle("hidden", tab !== "api-key");
   dom.panelMemory.classList.toggle("hidden", tab !== "memory");
+  if (dom.panelDb) {
+    dom.panelDb.classList.toggle("hidden", tab !== "db");
+  }
   if (dom.panelBackend) {
     dom.panelBackend.classList.toggle("hidden", tab !== "backend");
   }
   if (tab === "backend") {
     refreshBackendPanel();
+  }
+  if (tab === "db") {
+    void refreshDbLogs();
   }
   void refreshDebug();
 }
@@ -990,6 +1001,47 @@ async function testBackendConnection(base) {
   }
 }
 
+async function refreshDbLogs() {
+  if (!dom.dbLogs) return;
+  try {
+    const data = await debugRequest("/db-logs?limit=50");
+    const convs = data.conversations || [];
+    dom.dbLogs.innerHTML = "";
+    if (!convs.length) {
+      if (dom.dbEmpty) dom.dbEmpty.classList.remove("hidden");
+      return;
+    }
+    if (dom.dbEmpty) dom.dbEmpty.classList.add("hidden");
+    for (const c of convs) {
+      const card = el("div", "card p-3 space-y-2");
+      const header = el("div", "flex items-center gap-2");
+      const id = el("p", "flex-1 font-mono text-[0.68rem] break-all text-ink");
+      id.textContent = c.conversation_id;
+      const count = el("span", "chip !py-0.5");
+      count.textContent = `${c.message_count} msg`;
+      header.append(id, count);
+      card.appendChild(header);
+      const list = el("div", "space-y-1");
+      for (const m of c.messages || []) {
+        const row = el("div", "text-xs");
+        const role = el("span", "text-ink-faint");
+        role.textContent = m.role + ": ";
+        const content = el("span", "text-ink-soft break-words");
+        content.textContent = m.content || "";
+        row.append(role, content);
+        list.appendChild(row);
+      }
+      card.appendChild(list);
+      dom.dbLogs.appendChild(card);
+    }
+  } catch (error) {
+    if (dom.dbEmpty) {
+      dom.dbEmpty.textContent = `Failed: ${error.message}`;
+      dom.dbEmpty.classList.remove("hidden");
+    }
+  }
+}
+
 /* -------------------------------------------------------------------------- */
 /* Wiring                                                                     */
 /* -------------------------------------------------------------------------- */
@@ -1186,6 +1238,21 @@ dom.adminToken.addEventListener("input", () => {
   else localStorage.removeItem(ADMIN_KEY);
   void refreshDebug();
 });
+
+if (dom.dbRefresh) {
+  dom.dbRefresh.addEventListener("click", () => void refreshDbLogs());
+}
+if (dom.dbClear) {
+  dom.dbClear.addEventListener("click", async () => {
+    try {
+      await debugRequest("/db-logs", { method: "DELETE" });
+      toast("DB logs cleared");
+      await refreshDbLogs();
+    } catch (error) {
+      toast(error.message, "error");
+    }
+  });
+}
 
 if (dom.backendPresetLocal) {
   dom.backendPresetLocal.addEventListener("click", () => {
